@@ -1,0 +1,86 @@
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#05070E;--bg2:#0A0E1A;--bg3:#0F1526;--bg4:#151C30;
+  --g:#00DC72;--g3:#00F07D;--or:#FF6B35;--bl:#4F8EF7;
+  --pu:#8B5CF6;--am:#F59E0B;--re:#EF4444;--pk:#EC4899;
+  --t1:#FFFFFF;--t2:#F8FAFC;--t3:#E2E8F0;
+  --bd:#1A2040;--bd2:#252D4A;
+}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--t1);font-family:'DM Sans',sans-serif;min-height:100vh}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes slam{0%{transform:scale(.55);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes glow{0%,100%{box-shadow:0 0 12px rgba(0,220,114,.08)}50%{box-shadow:0 0 28px rgba(0,220,114,.25)}}
+@keyframes urgentR{0%,100%{color:#EF4444}50%{color:#FF9090}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes ticker{from{transform:translateX(100vw)}to{transform:translateX(-100%)}}
+@keyframes sarSpin{to{transform:rotate(360deg)}}
+
+/* New Premium Animations */
+@keyframes stamp {
+  0% { transform: scale(3) rotate(-10deg); opacity: 0; text-shadow: 0 0 40px rgba(0,220,114,0); }
+  40% { transform: scale(0.85) rotate(-10deg); opacity: 1; text-shadow: 0 0 100px rgba(0,220,114,1); }
+  70% { transform: scale(1.05) rotate(-10deg); opacity: 1; text-shadow: 0 0 80px rgba(0,220,114,0.8); }
+  100% { transform: scale(1) rotate(-10deg); opacity: 1; text-shadow: 0 0 60px rgba(0,220,114,0.5); }
+}
+
+@keyframes pop {
+  0% { transform: scale(1); color: var(--g); }
+  50% { transform: scale(1.2); color: #fff; text-shadow: 0 0 30px var(--g); }
+  100% { transform: scale(1); color: var(--g); }
+}
+
+@keyframes urgentPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); border-color: rgba(239,68,68,0.5); }
+  50% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); border-color: var(--re); }
+}
+
+.anim-stamp { animation: stamp 0.6s cubic-bezier(.25,.8,.25,1) forwards; display: inline-block; }
+.anim-pop { animation: pop 0.4s ease; }
+.anim-urgent { animation: urgentPulse 1s infinite; border: 1px solid transparent; }
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;letter-spacing:.5px;text-transform:uppercase;transition:all .18s cubic-bezier(0.4, 0, 0.2, 1);white-space:nowrap;position:relative;overflow:hidden}
+.bp{background:var(--g);color:#000;box-shadow: 0 4px 14px 0 rgba(0,220,114,0.15)}
+.bp:hover{background:var(--g3);transform:translateY(-2px);box-shadow: 0 6px 20px 0 rgba(0,220,114,0.3)}
+.bp:active{transform:translateY(0);box-shadow: 0 2px 8px 0 rgba(0,220,114,0.15)}
+.bs{background:rgba(255,255,255,0.03);backdrop-filter:blur(10px);color:var(--t1);border:1px solid var(--bd2)}
+.bs:hover{background:rgba(255,255,255,0.08);border-color:var(--t3);transform:translateY(-1px)}
+.bsm{padding:5px 11px;font-size:12px}
+.btn:disabled{opacity:.38;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+
+/* Glassmorphism Cards */
+.card{
+  background:rgba(10, 14, 26, 0.6);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(255, 255, 255, 0.06);
+  border-radius:12px;
+  padding:16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+.hover-lift { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease; }
+.hover-lift:hover { 
+  transform: translateY(-4px); 
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4); 
+  border-color: rgba(255,255,255,0.15) !important;
+}
+
+.tag{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+.inp{background:rgba(15, 21, 38, 0.7);backdrop-filter:blur(8px);border:1px solid var(--bd2);border-radius:8px;padding:9px 12px;color:var(--t1);font-family:'DM Sans',sans-serif;font-size:14px;width:100%;outline:none;transition:all .2s;box-shadow: inset 0 2px 4px rgba(0,0,0,0.2)}
+.inp:focus{border-color:var(--g);background:rgba(15, 21, 38, 0.9);box-shadow: 0 0 0 2px rgba(0,220,114,0.15), inset 0 2px 4px rgba(0,0,0,0.2)}
+.inp::placeholder{color:var(--t3)}
+select.inp option{background:var(--bg3)}
+
+/* Auction room layout */
+.auction-grid{display:grid;grid-template-columns:220px 1fr 240px;height:calc(100vh - 54px);overflow:hidden}
+@media(max-width:900px){.auction-grid{grid-template-columns:1fr}}
