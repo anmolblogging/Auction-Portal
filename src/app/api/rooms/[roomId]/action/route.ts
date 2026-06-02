@@ -97,12 +97,8 @@ export async function POST(
         // Save the entire room back to database
         await saveRoom(room);
 
-        // Fetch fresh state to return accurate data
-        const freshRoom = await getRoom(roomId);
-        if (!freshRoom) return NextResponse.json({ error: 'Room not found after bid' }, { status: 404 });
-        
-        const timeLeft = freshRoom.endsAt ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000)) : 60;
-        return NextResponse.json({ room: { ...freshRoom, timeLeft } });
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+        return NextResponse.json({ room: { ...room, timeLeft } });
       }
 
       // ─────────────────────────────────────────────────────────────────
@@ -119,10 +115,8 @@ export async function POST(
         room.chat = room.chat.slice(-60);
         await saveRoom(room);
         
-        const freshRoom = await getRoom(roomId);
-        if (!freshRoom) return NextResponse.json({ error: 'Room not found after chat' }, { status: 404 });
-        const timeLeft = freshRoom.endsAt ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000)) : 60;
-        return NextResponse.json({ room: { ...freshRoom, timeLeft } });
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+        return NextResponse.json({ room: { ...room, timeLeft } });
       }
 
       default:

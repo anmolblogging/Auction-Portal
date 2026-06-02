@@ -176,6 +176,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   // Smooth client-side timer tick sync from server's endsAt timestamp
   useEffect(() => {
+    let mounted = true;
     transitionRef.current = false; // Reset when roomState updates
     const timer = setInterval(() => {
       if (roomState && roomState.endsAt) {
@@ -188,9 +189,19 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           fetch(`/api/rooms/${roomState.id}?t=${Date.now()}`, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
-              // If server hasn't transitioned yet (clock skew), reset ref to try again
-              if (data.room && data.room.phase === roomState.phase) {
-                setTimeout(() => { transitionRef.current = false; }, 500);
+              if (data.room) {
+                // ALWAYS update the UI with the fresh server state.
+                // This instantly fixes the timer if we missed a Realtime WebSocket event 
+                // (e.g. someone bid, extending the timer, but our browser didn't get the ping).
+                if (mounted) setRoomState(data.room);
+                
+                if (data.room.phase === roomState.phase) {
+                  // If phase didn't advance (clock skew or timer was extended), reset ref to allow future pings
+                  setTimeout(() => { transitionRef.current = false; }, 500);
+                } else {
+                  // Server successfully advanced the phase
+                  transitionRef.current = false;
+                }
               }
             })
             .catch(() => {
@@ -200,7 +211,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       }
     }, 100);
 
-    return () => clearInterval(timer);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
   }, [roomState]);
 
   // Timer for scheduled auto-start countdown
