@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const res = await fetch('https://www.espn.com/espn/rss/news', { next: { revalidate: 3600 } });
