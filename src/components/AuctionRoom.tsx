@@ -152,25 +152,41 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'bids' },
+        { event: '*', schema: 'public', table: 'bids' },
         () => {
           if (active) fetchState();
         }
       )
       .subscribe();
 
+    // Fallback polling every 3 seconds
+    // This guarantees the UI updates even if WebSockets disconnect or Supabase Replication isn't fully enabled
+    const fallbackInterval = setInterval(() => {
+      if (active) fetchState();
+    }, 3000);
+
     return () => {
       active = false;
+      clearInterval(fallbackInterval);
       supabase!.removeChannel(channel);
     };
   }, [roomId]);
 
+  const transitionRef = useRef(false);
+
   // Smooth client-side timer tick sync from server's endsAt timestamp
   useEffect(() => {
+    transitionRef.current = false; // Reset when roomState updates
     const timer = setInterval(() => {
-      if (roomState && roomState.endsAt && roomState.phase === 'bidding') {
+      if (roomState && roomState.endsAt) {
         const left = Math.max(0, Math.ceil((roomState.endsAt - Date.now()) / 1000));
-        setTimeLeft(left);
+        if (roomState.phase === 'bidding') setTimeLeft(left);
+
+        // When timer hits 0, ping server once to process phase transition (sold/unsold/next)
+        if (left === 0 && !transitionRef.current && (roomState.phase === 'bidding' || roomState.phase === 'sold' || roomState.phase === 'unsold')) {
+          transitionRef.current = true;
+          fetch(`/api/rooms/${roomState.id}?t=${Date.now()}`, { cache: 'no-store' });
+        }
       }
     }, 100);
 

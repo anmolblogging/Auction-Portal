@@ -90,7 +90,22 @@ export async function POST(
         // Resolve DB UUIDs needed for the targeted writes
         const dbTeamId = getDeterministicUuid(`${roomId}-${bidder}`);
         const activePlayer = room.players[room.playerIdx];
-        const dbPlayerId = getDeterministicUuid(`${roomId}-player-${activePlayer.id}`);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(activePlayer.id));
+        const dbPlayerId = isUuid ? String(activePlayer.id) : getDeterministicUuid(`${roomId}-player-${activePlayer.id}`);
+
+        // If running in local DB fallback mode (no Supabase), use the old saveRoom pattern
+        if (!supabase) {
+          room.currentBid = nextBidVal;
+          room.currentBidder = bidder;
+          room.endsAt = newEndsAt;
+          room.bidHistory.unshift({ id: now, bidder, amount: nextBidVal });
+          room.bidHistory = room.bidHistory.slice(0, 30);
+          await saveRoom(room);
+          const freshRoom = await getRoom(roomId);
+          if (!freshRoom) return NextResponse.json({ error: 'Room not found after bid' }, { status: 404 });
+          const timeLeft = freshRoom.endsAt ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000)) : 60;
+          return NextResponse.json({ room: { ...freshRoom, timeLeft } });
+        }
 
         // Try the atomic RPC first (requires the function to exist in Supabase)
         let rpcSuccess = false;
@@ -162,39 +177,14 @@ export async function POST(
           return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 });
         }
 
-        // Resolve sender's DB UUID if they exist (best-effort)
-        let dbSenderId: string | null = null;
-        try {
-          const senderUuid = getDeterministicUuid(userId);
-          const { data: existingUser } = await (supabase as any)
-            .from('users')
-            .select('id')
-            .eq('id', senderUuid)
-            .single();
-          if (existingUser) dbSenderId = senderUuid;
-        } catch (_) {
-          // Sender lookup failed — send as anonymous
-        }
-
-        const { error: chatErr } = await (supabase as any).from('chat_messages').insert({
-          room_id: dbRoomId,
-          user_id: dbSenderId,
-          message: msg.trim(),
-        });
-
-        if (chatErr) {
-          console.error('Chat insert error:', chatErr);
-          return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
-        }
-
-        // Fetch fresh state with the new chat message included
+        // Use the saveRoom pattern for chat to ensure user mapping is handled correctly by db.ts
+        room.chat.push({ id: now, user: user || 'Guest', msg: msg.trim() });
+        room.chat = room.chat.slice(-60);
+        await saveRoom(room);
+        
         const freshRoom = await getRoom(roomId);
-        if (!freshRoom) {
-          return NextResponse.json({ error: 'Room not found after chat' }, { status: 404 });
-        }
-        const timeLeft = freshRoom.endsAt
-          ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000))
-          : 60;
+        if (!freshRoom) return NextResponse.json({ error: 'Room not found after chat' }, { status: 404 });
+        const timeLeft = freshRoom.endsAt ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000)) : 60;
         return NextResponse.json({ room: { ...freshRoom, timeLeft } });
       }
 
