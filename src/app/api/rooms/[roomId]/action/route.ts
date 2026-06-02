@@ -1,5 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { getRoom, saveRoom } from '@/lib/db';
+
+const BID_TIMER_MS = 60000;
+const BID_EXTENSION_MS = 20000;
 
 export async function POST(
   req: Request,
@@ -40,12 +44,7 @@ export async function POST(
         room.playerIdx = 0;
         room.currentBid = room.players[0].base;
         room.currentBidder = null;
-        room.endsAt = now + 30000; // 30s timer
-        room.chat.push({
-          id: now,
-          user: 'System',
-          msg: `🚀 Host started the auction! First up: ${room.players[0].name} (Base: ₹${room.players[0].base}L)`,
-        });
+        room.endsAt = now + BID_TIMER_MS;
         modified = true;
         break;
       }
@@ -57,7 +56,7 @@ export async function POST(
           return NextResponse.json({ error: 'Bidding is not active' }, { status: 400 });
         }
 
-        const team = room.participants.find((p) => p.id === bidder);
+        const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) {
           return NextResponse.json({ error: 'Team not found' }, { status: 404 });
         }
@@ -78,8 +77,7 @@ export async function POST(
 
         room.currentBid = nextBidVal;
         room.currentBidder = bidder;
-        // Extend timer: add 20s, capped at max 30s from now (similar to original code)
-        room.endsAt = Math.min((room.endsAt || now) + 20000, now + 30000);
+        room.endsAt = Math.min((room.endsAt || now) + BID_EXTENSION_MS, now + BID_TIMER_MS);
 
         room.bidHistory.unshift({
           id: now,
@@ -88,11 +86,7 @@ export async function POST(
         });
         room.bidHistory = room.bidHistory.slice(0, 30);
 
-        room.chat.push({
-          id: now,
-          user: 'System',
-          msg: `🔥 ${team.name} bid ₹${nextBidVal}L!`,
-        });
+        // No chat push for bids as requested
 
         modified = true;
         break;
@@ -124,7 +118,7 @@ export async function POST(
     }
 
     // Return current state, calculating time left
-    const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
+    const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
 
     return NextResponse.json({
       room: {

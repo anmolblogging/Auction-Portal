@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { readDb, saveRoom, ServerRoom } from '@/lib/db';
+import { readDb, saveRoom, ServerRoom, getDeterministicUuid } from '@/lib/db';
 
 export async function POST(req: Request) {
   try {
@@ -69,6 +70,11 @@ export async function POST(req: Request) {
     const isScheduled = scheduledAt && scheduledAt > Date.now();
     const scheduledDate = isScheduled ? new Date(scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : null;
 
+    const mappedPlayers = players.map((p, idx) => ({
+      ...p,
+      id: getDeterministicUuid(`${roomId}-player-${p.id || idx}`)
+    }));
+
     const newRoom: ServerRoom = {
       id: roomId,
       name: name || 'Sports Auction',
@@ -79,7 +85,7 @@ export async function POST(req: Request) {
       enableBots: enableBots ?? true,
       phase: isScheduled ? 'scheduled' : 'lobby',
       playerIdx: 0,
-      currentBid: players[0]?.base || 50,
+      currentBid: mappedPlayers[0]?.base || 50,
       currentBidder: null,
       endsAt: null,
       bidHistory: [],
@@ -95,7 +101,7 @@ export async function POST(req: Request) {
       participants: initializedParticipants,
       soldLog: [],
       unsoldLog: [],
-      players: players,
+      players: mappedPlayers,
       hostId,
       scheduledAt: isScheduled ? scheduledAt : null,
       createdAt: Date.now(),
@@ -107,6 +113,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ room: newRoom });
   } catch (error: any) {
     console.error('Error creating room:', error);
+    return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get('userId');
+    if (!userId) {
+      return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+    }
+
+    const db = await readDb();
+    const userRooms = Object.values(db).filter((room: ServerRoom) => {
+      return room.participants.some(p => p.ownerId === userId);
+    });
+
+    const history = userRooms.map((r: ServerRoom) => ({
+      id: r.id,
+      name: r.name,
+      sport: r.sport,
+      phase: r.phase,
+      updatedAt: r.updatedAt || Date.now(),
+    })).sort((a, b) => b.updatedAt - a.updatedAt);
+
+    return NextResponse.json({ history });
+  } catch (error: any) {
+    console.error('Error fetching room history:', error);
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
   }
 }

@@ -1,6 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { getRoom, saveRoom, cleanInactiveRooms, ServerRoom } from '@/lib/db';
 import { Player } from '@/lib/types';
+
+const BID_TIMER_MS = 60000;
+const BID_EXTENSION_MS = 20000;
 
 function updateRoomStatus(room: ServerRoom): boolean {
   let changed = false;
@@ -18,7 +22,7 @@ function updateRoomStatus(room: ServerRoom): boolean {
         id: now,
         user: 'System',
         msg: `🔨 SOLD! ${room.players[room.playerIdx].name} sold to ${
-          room.participants.find((p) => p.id === room.currentBidder)?.name
+          room.participants.find((p: any) => p.id === room.currentBidder)?.name
         } for ₹${room.currentBid}L!`,
       });
     } else {
@@ -43,7 +47,7 @@ function updateRoomStatus(room: ServerRoom): boolean {
       const who = room.currentBidder;
       const soldPlayer: Player = { ...room.players[room.playerIdx], soldPrice: bid };
 
-      room.participants = room.participants.map((p) =>
+      room.participants = room.participants.map((p: any) =>
         p.id === who
           ? {
               ...p,
@@ -70,12 +74,7 @@ function updateRoomStatus(room: ServerRoom): boolean {
       room.playerIdx = ni;
       room.currentBid = room.players[ni].base;
       room.currentBidder = null;
-      room.endsAt = now + 30000; // 30 seconds for next player
-      room.chat.push({
-        id: now,
-        user: 'System',
-        msg: `🏃 Next up: ${room.players[ni].name} (Base: ₹${room.players[ni].base}L)`,
-      });
+      room.endsAt = now + BID_TIMER_MS;
     }
     changed = true;
   }
@@ -93,7 +92,7 @@ function processBotBidding(room: ServerRoom): boolean {
   if (timeLeft < 3) return false;
 
   // Get last bid time. If no bids yet, use the room createdAt/updatedAt
-  const lastBidTime = room.bidHistory.length > 0 ? room.bidHistory[0].id : room.updatedAt;
+  const lastBidTime = room.bidHistory.length > 0 ? room.bidHistory[0].id : (room.updatedAt || now);
   const secSinceLastBid = (now - lastBidTime) / 1000;
 
   // Wait a random duration of 3.5 to 8.5 seconds between bids
@@ -101,7 +100,7 @@ function processBotBidding(room: ServerRoom): boolean {
 
   // Filter CPU participants (where ownerId is null) who are NOT already the high bidder
   const cpuTeams = room.participants.filter(
-    (p) => p.ownerId === null && p.id !== room.currentBidder
+    (p: any) => p.ownerId === null && p.id !== room.currentBidder
   );
   if (cpuTeams.length === 0) return false;
 
@@ -119,8 +118,7 @@ function processBotBidding(room: ServerRoom): boolean {
   if (nextBidAmount <= maxW && nextBidAmount <= (botTeam.budget - botTeam.spent)) {
     room.currentBid = nextBidAmount;
     room.currentBidder = botTeam.id;
-    // Add 20 seconds to time left, capped at 30 seconds
-    room.endsAt = Math.min(room.endsAt + 20000, now + 30000);
+    room.endsAt = Math.min(room.endsAt + BID_EXTENSION_MS, now + BID_TIMER_MS);
 
     room.bidHistory.unshift({
       id: now,
@@ -129,11 +127,7 @@ function processBotBidding(room: ServerRoom): boolean {
     });
     room.bidHistory = room.bidHistory.slice(0, 30);
 
-    room.chat.push({
-      id: now,
-      user: 'System',
-      msg: `🤖 ${botTeam.name} bids ₹${nextBidAmount}L!`,
-    });
+    // No chat push for bot bids as requested
 
     return true;
   }
@@ -167,7 +161,7 @@ export async function GET(
 
     // Auto-start scheduled rooms when their time arrives and all teams have joined
     const totalTeams = room.participants.length;
-    const joinedTeams = room.participants.filter((p) => p.ownerId !== null).length;
+    const joinedTeams = room.participants.filter((p: any) => p.ownerId !== null).length;
     const allTeamsJoined = room.enableBots ? (joinedTeams >= 1) : (joinedTeams === totalTeams);
 
     if (room.phase === 'scheduled' && allTeamsJoined && room.scheduledAt && Date.now() >= room.scheduledAt) {
@@ -175,12 +169,7 @@ export async function GET(
       room.playerIdx = 0;
       room.currentBid = room.players[0]?.base || 50;
       room.currentBidder = null;
-      room.endsAt = Date.now() + 30000;
-      room.chat.push({
-        id: Date.now(),
-        user: 'System',
-        msg: `🚀 Scheduled auction is LIVE! First up: ${room.players[0]?.name} (Base: ₹${room.players[0]?.base}L)`,
-      });
+      room.endsAt = Date.now() + BID_TIMER_MS;
       modified = true;
     }
 
@@ -199,7 +188,7 @@ export async function GET(
     }
 
     // Calculate time left to return to client
-    const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
+    const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
 
     return NextResponse.json({
       room: {
@@ -220,10 +209,10 @@ export async function POST(
   try {
     const { roomId } = await params;
     const body = await req.json();
-    const { userId, teamId, userName } = body;
+    const { userId, userName, teamName, teamPhoto } = body;
 
-    if (!userId || !teamId) {
-      return NextResponse.json({ error: 'userId and teamId are required' }, { status: 400 });
+    if (!userId || !teamName?.trim()) {
+      return NextResponse.json({ error: 'userId and teamName are required' }, { status: 400 });
     }
 
     const room = await getRoom(roomId);
@@ -231,33 +220,27 @@ export async function POST(
       return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     }
 
-    // Check if team is already claimed by someone else
-    const team = room.participants.find((p) => p.id === teamId);
+    const existingTeam = room.participants.find((participant: any) => participant.ownerId === userId);
+    const team = existingTeam || room.participants.find((participant: any) => participant.ownerId === null);
     if (!team) {
-      return NextResponse.json({ error: 'Team not found in this room' }, { status: 404 });
+      return NextResponse.json({ error: 'No team slots are available in this room' }, { status: 400 });
     }
 
-    if (team.ownerId && team.ownerId !== userId) {
-      return NextResponse.json({ error: 'Team is already taken by another user' }, { status: 400 });
-    }
-
-    // Assign ownerId
     team.ownerId = userId;
-
-    // If joining user has custom name, update the team name too
-    if (userName && userName.trim()) {
-      team.name = userName;
+    team.name = teamName.trim();
+    if (typeof teamPhoto === 'string' && teamPhoto.trim()) {
+      team.photo = teamPhoto;
     }
 
     room.chat.push({
       id: Date.now(),
       user: 'System',
-      msg: `👤 ${userName || 'A user'} joined and claimed team "${team.name}"`,
+      msg: `👤 ${userName || 'A user'} joined as "${team.name}"`,
     });
 
     await saveRoom(room);
 
-    return NextResponse.json({ room });
+    return NextResponse.json({ room, teamId: team.id });
   } catch (error: any) {
     console.error('Error joining room:', error);
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });

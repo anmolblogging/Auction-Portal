@@ -1,15 +1,37 @@
 'use client';
-import { useState } from 'react';
-import { ServerRoom } from '@/lib/db';
+import { useRef, useState, useEffect } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import type { AuthSession, ManagedUser } from '@/lib/auth';
+import Avatar from '@/components/ui/Avatar';
 
 interface LandingProps {
   userId: string;
+  authSession: AuthSession | null;
+  managedUsers: ManagedUser[];
   onStart: () => void;
   onJoin: (roomId: string, teamId: string, userName: string) => void;
+  onLogin: (userId: string, password: string) => void;
+  onLogout: () => void;
+  onCreateUser: (userId: string, password: string) => void;
+  onToggleUser: (userId: string) => void;
+}
+
+interface JoinRoomDetails {
+  id: string;
+  name: string;
+  sport: string;
+  tournament: string;
+  budget: number;
+  participants: Array<{
+    id: string;
+    name: string;
+    color: string;
+    ownerId: string | null;
+  }>;
 }
 
 const FEATURES = [
-  ['⚡', 'Live Bidding', '30s countdown — every bid adds +20 seconds to the clock'],
+  ['⚡', 'Live Bidding', '60s countdown — every bid adds +20 seconds to the clock'],
   ['🔍', 'AI Player Scout', 'Search any player name or URL; AI fetches role, country & base price'],
   ['📁', 'Smart Upload', 'Import from Excel (.xlsx) — columns auto-detected'],
   ['📄', 'PDF Parsing', 'Upload a PDF squad list; AI extracts all players automatically'],
@@ -17,15 +39,98 @@ const FEATURES = [
   ['🏟', 'Multi-Sport', 'IPL, UEFA, FIFA, NBA or any custom tournament'],
 ];
 
-export default function Landing({ userId, onStart, onJoin }: LandingProps) {
+const overlayStyle: CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(5,7,14,0.85)',
+  backdropFilter: 'blur(8px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+  padding: 16,
+};
+
+const modalStyle: CSSProperties = {
+  width: '100%',
+  maxWidth: 480,
+  animation: 'fadeUp 0.3s ease',
+  border: '1px solid var(--bd2)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 18,
+  padding: 24,
+};
+
+function Label({ children }: { children: ReactNode }) {
+  return (
+    <label
+      style={{
+        fontFamily: "'Rajdhani', sans-serif",
+        fontSize: 11,
+        fontWeight: 700,
+        color: 'var(--t3)',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+      }}
+    >
+      {children}
+    </label>
+  );
+}
+
+function formatCreatedAt(createdAt: number) {
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(createdAt);
+}
+
+export default function Landing({
+  userId,
+  authSession,
+  managedUsers,
+  onStart,
+  onJoin,
+  onLogin,
+  onLogout,
+  onCreateUser,
+  onToggleUser,
+}: LandingProps) {
   const [showJoin, setShowJoin] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [loginIntent, setLoginIntent] = useState<'nav' | 'host'>('nav');
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [roomDetails, setRoomDetails] = useState<ServerRoom | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [roomDetails, setRoomDetails] = useState<JoinRoomDetails | null>(null);
+  const [teamName, setTeamName] = useState('');
+  const [teamPhoto, setTeamPhoto] = useState<string | null>(null);
+  const [loginForm, setLoginForm] = useState({ userId: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [settingsForm, setSettingsForm] = useState({ userId: '', password: '' });
+  const [settingsError, setSettingsError] = useState('');
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const [history, setHistory] = useState<any[]>([]);
+  const teamPhotoRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (userId) {
+      fetch(`/api/rooms?userId=${encodeURIComponent(userId)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.history) setHistory(data.history);
+        })
+        .catch(err => console.error(err));
+    }
+  }, [userId]);
+
+  const isAdmin = authSession?.isAdmin ?? false;
   async function checkRoom() {
     if (!roomCode.trim()) {
       setError('Please enter a room code');
@@ -34,7 +139,8 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
     setLoading(true);
     setError('');
     setRoomDetails(null);
-    setSelectedTeamId('');
+    setTeamName('');
+    setTeamPhoto(null);
     try {
       const code = roomCode.trim().toUpperCase();
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
@@ -43,9 +149,9 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
       if (data.error) {
         throw new Error(data.error);
       }
-      setRoomDetails(data.room);
-    } catch (e: any) {
-      setError(e.message || 'Room not found');
+      setRoomDetails(data.room as JoinRoomDetails);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Room not found');
     } finally {
       setLoading(false);
     }
@@ -57,8 +163,8 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
       setError('Please enter your display name');
       return;
     }
-    if (!selectedTeamId) {
-      setError('Please select a team');
+    if (!teamName.trim()) {
+      setError('Please enter your team name');
       return;
     }
     setLoading(true);
@@ -69,53 +175,180 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
-          teamId: selectedTeamId,
           userName: userName.trim(),
+          teamName: teamName.trim(),
+          teamPhoto,
         }),
       });
       const data = await res.json();
       if (data.error) {
         throw new Error(data.error);
       }
-      onJoin(roomDetails.id, selectedTeamId, userName.trim());
-    } catch (e: any) {
-      setError(e.message || 'Failed to join');
+      onJoin(roomDetails.id, data.teamId, userName.trim());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to join');
     } finally {
       setLoading(false);
     }
   }
 
-  function handleClose() {
+  function handleCloseJoin() {
     setShowJoin(false);
     setRoomCode('');
     setUserName('');
+    setTeamName('');
+    setTeamPhoto(null);
     setRoomDetails(null);
-    setSelectedTeamId('');
     setError('');
+  }
+
+  function openLogin(intent: 'nav' | 'host') {
+    setLoginIntent(intent);
+    setLoginError('');
+    setLoginForm({ userId: '', password: '' });
+    setShowLogin(true);
+  }
+
+  function closeLogin() {
+    setShowLogin(false);
+    setLoginError('');
+    setLoginForm({ userId: '', password: '' });
+  }
+
+  function handleHostAccess() {
+    if (authSession) {
+      onStart();
+      return;
+    }
+    openLogin('host');
+  }
+
+  function submitLogin() {
+    if (!loginForm.userId.trim() || !loginForm.password.trim()) {
+      setLoginError('Enter both user ID and password');
+      return;
+    }
+
+    try {
+      onLogin(loginForm.userId, loginForm.password);
+      closeLogin();
+      if (loginIntent === 'host') {
+        onStart();
+      }
+    } catch (e: unknown) {
+      setLoginError(e instanceof Error ? e.message : 'Login failed');
+    }
+  }
+
+  function submitManagedUser() {
+    if (!settingsForm.userId.trim() || !settingsForm.password.trim()) {
+      setSettingsError('Add both a user ID and password');
+      return;
+    }
+
+    try {
+      onCreateUser(settingsForm.userId, settingsForm.password);
+      setSettingsForm({ userId: '', password: '' });
+      setSettingsError('');
+      setSettingsMessage(`User ${settingsForm.userId.trim().toLowerCase()} created and activated`);
+    } catch (e: unknown) {
+      setSettingsMessage('');
+      setSettingsError(e instanceof Error ? e.message : 'Failed to create user');
+    }
+  }
+
+  function handleToggleManagedUser(targetUserId: string, active: boolean) {
+    try {
+      onToggleUser(targetUserId);
+      setSettingsError('');
+      setSettingsMessage(`${targetUserId} ${active ? 'deactivated' : 'activated'} successfully`);
+    } catch (e: unknown) {
+      setSettingsMessage('');
+      setSettingsError(e instanceof Error ? e.message : 'Failed to update user');
+    }
   }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Ticker */}
       <div style={{ background: 'var(--g)', overflow: 'hidden', whiteSpace: 'nowrap', padding: '5px 0' }}>
         <span style={{ display: 'inline-block', animation: 'ticker 24s linear infinite', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 12, color: '#000', letterSpacing: 1 }}>
           🔴 LIVE: Virat Kohli SOLD ₹260L &nbsp;•&nbsp; Bumrah going ₹228L &nbsp;•&nbsp; New IPL 2025 room open &nbsp;•&nbsp; Rashid Khan SOLD ₹148L &nbsp;•&nbsp; AI auto-priced 12 players from Wikipedia &nbsp;•&nbsp;
         </span>
       </div>
 
-      {/* Nav */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px', borderBottom: '1px solid var(--bd)' }}>
-        <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)', letterSpacing: 3 }}>SAR</span>
-        <div style={{ display: 'flex', gap: 10 }}>
+      <nav
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          padding: '14px clamp(16px,4vw,40px)',
+          borderBottom: '1px solid var(--bd)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)', letterSpacing: 3 }}>SAR</span>
+          {authSession && (
+            <span
+              className="tag"
+              style={{
+                background: authSession.isAdmin ? 'rgba(245,158,11,0.12)' : 'rgba(0,220,114,0.1)',
+                color: authSession.isAdmin ? 'var(--am)' : 'var(--g)',
+                border: `1px solid ${authSession.isAdmin ? 'rgba(245,158,11,0.2)' : 'rgba(0,220,114,0.18)'}`,
+              }}
+            >
+              {authSession.isAdmin ? 'Admin Mode' : `Logged In: ${authSession.userId}`}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn bs bsm" onClick={() => setShowJoin(true)}>Join Room</button>
-          <button className="btn bp bsm" onClick={onStart}>Create Room</button>
+          {authSession ? (
+            <>
+              {isAdmin && (
+                <button className="btn bs bsm" onClick={() => setShowSettings(true)}>Settings</button>
+              )}
+              <button className="btn bp bsm" onClick={onStart}>Create Room</button>
+              <button className="btn bs bsm" onClick={onLogout}>Logout</button>
+            </>
+          ) : (
+            <button className="btn bp bsm" onClick={() => openLogin('nav')}>Login</button>
+          )}
         </div>
       </nav>
 
-      {/* Hero */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px 40px 36px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'row', width: '100%', alignItems: 'stretch' }}>
+        {/* ROOM HISTORY SIDEBAR */}
+        {userId && history.length > 0 && (
+          <div style={{ width: 'clamp(260px, 25vw, 340px)', borderRight: '1px solid var(--bd)', padding: '24px 20px', overflowY: 'auto', background: 'rgba(0,0,0,0.15)' }}>
+            <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2, color: 'var(--t1)', marginBottom: 16 }}>Your Recent Rooms</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {history.map((room) => (
+                <div key={room.id} className="card hover-lift" style={{ padding: 14, cursor: 'pointer', border: '1px solid var(--bd2)' }} onClick={() => {
+                  setRoomCode(room.id);
+                  setShowJoin(true);
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 700, color: 'var(--t1)' }}>{room.name}</div>
+                    <span className="tag" style={{ fontSize: 9, padding: '2px 6px', background: room.phase === 'done' ? 'rgba(255,255,255,0.1)' : room.phase === 'bidding' ? 'rgba(0,220,114,0.15)' : 'rgba(245,158,11,0.15)', color: room.phase === 'done' ? 'var(--t3)' : room.phase === 'bidding' ? 'var(--g)' : 'var(--am)' }}>
+                      {room.phase.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--t3)', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{room.sport}</span>
+                    <span>{new Date(room.updatedAt).toLocaleDateString()}</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--t2)', marginTop: 8, opacity: 0.6 }}>ID: {room.id}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px clamp(16px,4vw,40px) 36px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,220,114,.045) 0%,transparent 70%)', pointerEvents: 'none' }} />
-        <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1 }}>
+        <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1, width: '100%' }}>
           <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(54px,9vw,108px)', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
             SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
           </h1>
@@ -123,12 +356,14 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
             Host live fantasy auctions with friends. Bid on players, build your squad, and see who gets the best value.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn bp" onClick={onStart} style={{ fontSize: 17, padding: '13px 34px' }}>🚀 Host Auction</button>
+            <button className="btn bp" onClick={handleHostAccess} style={{ fontSize: 17, padding: '13px 34px' }}>
+              {authSession ? '🚀 Host Auction' : '🔐 Login to Host'}
+            </button>
             <button className="btn bs" onClick={() => setShowJoin(true)} style={{ fontSize: 17, padding: '13px 34px' }}>Join a Room</button>
           </div>
-          <div style={{ display: 'flex', gap: 48, justifyContent: 'center', marginTop: 48 }}>
+          <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
             {[{ v: '2,400+', l: 'Auctions' }, { v: '18K+', l: 'Players Sold' }, { v: '4.9★', l: 'Rating' }].map((s) => (
-              <div key={s.l} style={{ textAlign: 'center' }}>
+              <div key={s.l} style={{ textAlign: 'center', minWidth: 90 }}>
                 <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>{s.v}</div>
                 <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>{s.l}</div>
               </div>
@@ -136,9 +371,9 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
           </div>
         </div>
       </div>
+      </div>
 
-      {/* Features */}
-      <div style={{ padding: '44px 40px', background: 'var(--bg2)', borderTop: '1px solid var(--bd)' }}>
+      <div style={{ padding: '44px clamp(16px,4vw,40px)', background: 'var(--bg2)', borderTop: '1px solid var(--bd)' }}>
         <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 44, letterSpacing: 3, textAlign: 'center', marginBottom: 28 }}>WHAT&apos;S INSIDE</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
           {FEATURES.map(([icon, title, desc]) => (
@@ -150,13 +385,12 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
         </div>
       </div>
 
-      {/* Join Room Modal */}
       {showJoin && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5,7,14,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 480, animation: 'fadeUp 0.3s ease', border: '1px solid var(--bd2)', display: 'flex', flexDirection: 'column', gap: 18, padding: 24 }}>
+        <div style={overlayStyle}>
+          <div className="card" style={modalStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>JOIN AUCTION ROOM</h3>
-              <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
+              <button onClick={handleCloseJoin} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
             </div>
 
             {error && (
@@ -168,7 +402,7 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
             {!roomDetails ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase' }}>Room Code</label>
+                  <Label>Room Code</Label>
                   <input className="inp" placeholder="e.g. 7291 or AUC-7291" value={roomCode} onChange={(e) => setRoomCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') checkRoom(); }} />
                 </div>
                 <button className="btn bp" onClick={checkRoom} disabled={loading} style={{ width: '100%', padding: 12 }}>
@@ -177,86 +411,256 @@ export default function Landing({ userId, onStart, onJoin }: LandingProps) {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* Room Info */}
+                {(() => {
+                  const joinedTeams = roomDetails.participants.filter((participant) => participant.ownerId !== null).length;
+                  const openTeams = roomDetails.participants.length - joinedTeams;
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div style={{ background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 10, padding: 12, textAlign: 'center' }}>
+                        <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 1 }}>Joined Teams</div>
+                        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)', letterSpacing: 2 }}>{joinedTeams}</div>
+                      </div>
+                      <div style={{ background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 10, padding: 12, textAlign: 'center' }}>
+                        <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 1 }}>Open Slots</div>
+                        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: openTeams > 0 ? 'var(--am)' : 'var(--re)', letterSpacing: 2 }}>{openTeams}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div style={{ background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 10, padding: 14 }}>
                   <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: 'var(--g)', letterSpacing: 1 }}>{roomDetails.name}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--t2)', marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--t2)', marginTop: 4, gap: 12, flexWrap: 'wrap' }}>
                     <span>🏆 {roomDetails.tournament} ({roomDetails.sport})</span>
                     <span>💰 Budget: ₹{roomDetails.budget}L</span>
                   </div>
                 </div>
 
-                {/* Nickname input */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase' }}>Your Name / Alias</label>
+                  <Label>Your Name / Alias</Label>
                   <input className="inp" placeholder="Enter your name" value={userName} onChange={(e) => setUserName(e.target.value)} />
                 </div>
 
-                {/* Team selection */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase' }}>Select Your Team</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {roomDetails.participants.map((t) => {
-                      const isTaken = t.ownerId !== null && t.ownerId !== userId;
-                      const isMine = t.ownerId === userId;
-                      const isSelected = selectedTeamId === t.id;
+                  <Label>Your Team Name</Label>
+                  <input className="inp" placeholder="Enter your team name" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
+                </div>
 
-                      let borderClr = 'var(--bd)';
-                      let bg = 'var(--bg3)';
-                      if (isTaken) {
-                        borderClr = 'rgba(239,68,68,0.2)';
-                        bg = 'rgba(15,21,38,0.4)';
-                      } else if (isSelected || isMine) {
-                        borderClr = t.color;
-                        bg = `${t.color}12`;
-                      }
-
-                      return (
-                        <div key={t.id}
-                          onClick={() => { if (!isTaken) setSelectedTeamId(t.id); }}
-                          style={{
-                            border: `1px solid ${borderClr}`,
-                            background: bg,
-                            borderRadius: 8,
-                            padding: 12,
-                            cursor: isTaken ? 'not-allowed' : 'pointer',
-                            opacity: isTaken ? 0.5 : 1,
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 6,
-                            textAlign: 'center'
-                          }}>
-                          <span style={{
-                            fontFamily: "'Rajdhani', sans-serif",
-                            fontWeight: 700,
-                            fontSize: 14,
-                            color: isTaken ? 'var(--t3)' : t.color
-                          }}>
-                            {t.name}
-                          </span>
-                          {isTaken ? (
-                            <span style={{ fontSize: 9, background: 'rgba(239,68,68,0.1)', color: 'var(--re)', padding: '1px 6px', borderRadius: 10, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>TAKEN</span>
-                          ) : isMine ? (
-                            <span style={{ fontSize: 9, background: 'rgba(0,220,114,0.1)', color: 'var(--g)', padding: '1px 6px', borderRadius: 10, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>YOURS</span>
-                          ) : (
-                            <span style={{ fontSize: 9, background: 'var(--bd)', color: 'var(--t2)', padding: '1px 6px', borderRadius: 10, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>SELECT</span>
-                          )}
-                        </div>
-                      );
-                    })}
+                <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ cursor: 'pointer' }} onClick={() => teamPhotoRef.current?.click()}>
+                    <Avatar name={teamName || 'Team'} size={60} color="var(--g)" photo={teamPhoto} />
                   </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <Label>Team Logo (Optional)</Label>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button className="btn bs bsm" onClick={() => teamPhotoRef.current?.click()}>
+                        Upload Logo
+                      </button>
+                      {teamPhoto && (
+                        <button className="btn bs bsm" onClick={() => setTeamPhoto(null)}>
+                          Remove Logo
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ color: 'var(--t3)', fontSize: 11 }}>
+                      The next available slot will be assigned to this team.
+                    </div>
+                  </div>
+                  <input
+                    ref={teamPhotoRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        setTeamPhoto((event.target?.result as string) || null);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                  <button className="btn bs" onClick={() => setRoomDetails(null)} style={{ flex: 1 }}>Back</button>
-                  <button className="btn bp" onClick={submitJoin} disabled={loading || !selectedTeamId || !userName} style={{ flex: 2 }}>
+                  <button className="btn bs" onClick={() => { setRoomDetails(null); setTeamName(''); setTeamPhoto(null); }} style={{ flex: 1 }}>Back</button>
+                  <button className="btn bp" onClick={submitJoin} disabled={loading || !userName || !teamName} style={{ flex: 2 }}>
                     {loading ? 'Joining...' : 'Join Auction →'}
                   </button>
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showLogin && (
+        <div style={overlayStyle}>
+          <div className="card" style={modalStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>LOGIN</h3>
+                <p style={{ color: 'var(--t3)', fontSize: 12, marginTop: 4 }}>
+                  Sign in to host auctions and access admin settings.
+                </p>
+              </div>
+              <button onClick={closeLogin} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {loginError && (
+              <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: 'var(--re)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                ⚠️ {loginError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Label>User ID</Label>
+                <input
+                  className="inp"
+                  placeholder="Enter your user ID"
+                  value={loginForm.userId}
+                  onChange={(e) => setLoginForm((prev) => ({ ...prev, userId: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Label>Password</Label>
+                <input
+                  className="inp"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }}
+                />
+              </div>
+            </div>
+
+            <button className="btn bp" onClick={submitLogin} style={{ width: '100%', padding: 12 }}>
+              Login →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showSettings && isAdmin && (
+        <div style={overlayStyle}>
+          <div className="card" style={{ ...modalStyle, maxWidth: 760, maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, letterSpacing: 2 }}>USER SETTINGS</h3>
+                <p style={{ color: 'var(--t3)', fontSize: 12, marginTop: 4 }}>
+                  Create user IDs and activate or deactivate access.
+                </p>
+              </div>
+              <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
+              <div className="card" style={{ padding: 18, background: 'rgba(0,220,114,0.04)', border: '1px solid rgba(0,220,114,0.16)' }}>
+                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 1.5, marginBottom: 14 }}>CREATE USER</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <Label>New User ID</Label>
+                    <input
+                      className="inp"
+                      placeholder="e.g. auctionhost01"
+                      value={settingsForm.userId}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, userId: e.target.value }))}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <Label>Password</Label>
+                    <input
+                      className="inp"
+                      type="password"
+                      placeholder="Set a password"
+                      value={settingsForm.password}
+                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, password: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') submitManagedUser(); }}
+                    />
+                  </div>
+                  <button className="btn bp" onClick={submitManagedUser}>Create User</button>
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: 18 }}>
+                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 1.5, marginBottom: 14 }}>ADMIN ACCOUNT</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: 'var(--bg3)', border: '1px solid rgba(245,158,11,0.18)', borderRadius: 10, padding: 14 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 16, color: 'var(--t1)' }}>admin</div>
+                      <div style={{ color: 'var(--t3)', fontSize: 12 }}>Reserved account for settings access</div>
+                    </div>
+                    <span className="tag" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--am)' }}>
+                      Always Active
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {(settingsError || settingsMessage) && (
+              <div style={{
+                fontSize: 13,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: settingsError ? 'rgba(239,68,68,0.08)' : 'rgba(0,220,114,0.08)',
+                color: settingsError ? 'var(--re)' : 'var(--g)',
+                border: `1px solid ${settingsError ? 'rgba(239,68,68,0.2)' : 'rgba(0,220,114,0.18)'}`,
+              }}>
+                {settingsError ? `⚠️ ${settingsError}` : `✅ ${settingsMessage}`}
+              </div>
+            )}
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                <h4 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 1.5 }}>MANAGED USERS</h4>
+                <span style={{ color: 'var(--t3)', fontSize: 12 }}>
+                  {managedUsers.length} user{managedUsers.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {managedUsers.length === 0 ? (
+                <div className="card" style={{ padding: 18, color: 'var(--t3)', textAlign: 'center' }}>
+                  No additional users yet. Create one above to allow more hosts to log in.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+                  {[...managedUsers]
+                    .sort((a, b) => b.createdAt - a.createdAt)
+                    .map((managedUser) => (
+                      <div key={managedUser.userId} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                          <div>
+                            <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 16 }}>{managedUser.userId}</div>
+                            <div style={{ color: 'var(--t3)', fontSize: 11, marginTop: 3 }}>
+                              Created {formatCreatedAt(managedUser.createdAt)}
+                            </div>
+                          </div>
+                          <span
+                            className="tag"
+                            style={{
+                              background: managedUser.active ? 'rgba(0,220,114,0.1)' : 'rgba(239,68,68,0.1)',
+                              color: managedUser.active ? 'var(--g)' : 'var(--re)',
+                            }}
+                          >
+                            {managedUser.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <button
+                          className={`btn ${managedUser.active ? 'bs' : 'bp'}`}
+                          onClick={() => handleToggleManagedUser(managedUser.userId, managedUser.active)}
+                        >
+                          {managedUser.active ? 'Deactivate User' : 'Activate User'}
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

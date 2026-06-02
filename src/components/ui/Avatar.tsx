@@ -8,6 +8,7 @@ interface AvatarProps {
 export default function Avatar({ name, size = 36, color = '#00DC72', photo }: AvatarProps) {
   if (photo) {
     return (
+      /* eslint-disable-next-line @next/next/no-img-element */
       <img
         src={photo}
         alt={name}

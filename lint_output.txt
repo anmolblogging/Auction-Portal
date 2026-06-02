@@ -1,0 +1,125 @@
+
+> sports-auction-room@0.1.0 lint
+> eslint
+
+
+/Users/onkardange/Desktop/sports-auction-room/src/app/api/parse-pdf/route.ts
+  78:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  89:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/onkardange/Desktop/sports-auction-room/src/app/api/rooms/[roomId]/action/route.ts
+   63:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/onkardange/Desktop/sports-auction-room/src/app/api/rooms/[roomId]/route.ts
+   24:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   49:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:9   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  172:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  212:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  236:63  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  237:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  257:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/onkardange/Desktop/sports-auction-room/src/app/api/rooms/route.ts
+  113:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/onkardange/Desktop/sports-auction-room/src/app/api/search-player/route.ts
+  68:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  79:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/onkardange/Desktop/sports-auction-room/src/app/layout.tsx
+  13:9  warning  Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/AuctionRoom.tsx
+    3:10   warning  'Player' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+   73:43   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   79:35   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  156:6    warning  React Hook useEffect has a missing dependency: 'roomState'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+  182:6    warning  React Hook useEffect has a missing dependency: 'roomState'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+  194:7    error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/AuctionRoom.tsx:194:7
+  192 |   useEffect(() => {
+  193 |     if (roomState?.phase === 'done') {
+> 194 |       setTab('analytics');
+      |       ^^^^^^ Avoid calling setState() directly within an effect
+  195 |     }
+  196 |   }, [roomState?.phase]);
+  197 |  react-hooks/set-state-in-effect
+  557:175  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react/no-unescaped-entities
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/CreateRoom.tsx
+  506:79  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/CreateRoom.tsx:506:79
+  504 |           {step === 3 && (() => {
+  505 |             const getScheduleTs = () => new Date(`${scheduledDate}T${scheduledTime}`).getTime();
+> 506 |             const isScheduleValid = launchMode === 'now' || getScheduleTs() > Date.now() + 60000;
+      |                                                                               ^^^^^^^^^^ Cannot call impure function
+  507 |             const scheduleLabel = launchMode === 'schedule'
+  508 |               ? new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
+  509 |               : '';  react-hooks/purity
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/charts/DonutChart.tsx
+  28:9  error  Error: Cannot reassign variable after render completes
+
+Reassigning `offset` after render has completed can cause inconsistent behavior on subsequent renders. Consider using state instead.
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/charts/DonutChart.tsx:28:9
+  26 |           />
+  27 |         );
+> 28 |         offset += pct;
+     |         ^^^^^^ Cannot reassign `offset` after render completes
+  29 |         return el;
+  30 |       })}
+  31 |       <text x={cx} y={cy} textAnchor="middle" dy="0.35em" fill="var(--t1)"  react-hooks/immutability
+
+/Users/onkardange/Desktop/sports-auction-room/src/components/ui/Avatar.tsx
+  11:7  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/onkardange/Desktop/sports-auction-room/src/lib/db.ts
+   42:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   44:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   54:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:65  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  186:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  220:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  264:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  279:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  303:68  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  342:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  377:75  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  399:78  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  419:69  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/onkardange/Desktop/sports-auction-room/src/lib/supabase-helpers.ts
+   14:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   32:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   33:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   34:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   35:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   36:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   54:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 57 problems (52 errors, 5 warnings)
+

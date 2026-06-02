@@ -22,6 +22,7 @@ export interface Participant extends Team {
   budget: number;
   spent: number;
   squad: Player[];
+  ownerId?: string | null;
 }
 
 export interface BidEntry {
@@ -42,14 +43,14 @@ export interface SoldLogEntry {
   price: number;
 }
 
-export type AuctionPhase = 'bidding' | 'sold' | 'unsold' | 'done';
+export type AuctionPhase = 'lobby' | 'scheduled' | 'bidding' | 'sold' | 'unsold' | 'done';
 
 export interface AuctionState {
   phase: AuctionPhase;
   playerIdx: number;
   currentBid: number;
   currentBidder: string | null;
-  timeLeft: number;
+  timeLeft?: number;
   bidHistory: BidEntry[];
   chat: ChatEntry[];
   participants: Participant[];
@@ -57,6 +58,22 @@ export interface AuctionState {
   unsoldLog: Player[];
   players: Player[];
 }
+
+export interface ServerRoom extends AuctionState {
+  id: string;
+  name: string;
+  sport: string;
+  tournament: string;
+  budget: number;
+  squadSize: number;
+  enableBots: boolean;
+  endsAt: number | null;
+  scheduledAt?: number | null;
+  hostId?: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 
 export type AuctionAction =
   | { type: 'TICK' }

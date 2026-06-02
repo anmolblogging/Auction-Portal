@@ -23,10 +23,11 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
   switch (action.type) {
     case 'TICK': {
       if (state.phase !== 'bidding') return state;
-      if (state.timeLeft <= 1) {
+      const timeLeft = state.timeLeft || 0;
+      if (timeLeft <= 1) {
         return { ...state, phase: state.currentBidder ? 'sold' : 'unsold', timeLeft: 0 };
       }
-      return { ...state, timeLeft: state.timeLeft - 1 };
+      return { ...state, timeLeft: timeLeft - 1 };
     }
 
     case 'BID': {
@@ -40,7 +41,7 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
         ...state,
         currentBid: newBid,
         currentBidder: bidder,
-        timeLeft: Math.min(state.timeLeft + 20, 30),
+        timeLeft: Math.min((state.timeLeft || 0) + 20, 30),
         bidHistory: [newEntry, ...state.bidHistory.slice(0, 29)],
       };
     }
