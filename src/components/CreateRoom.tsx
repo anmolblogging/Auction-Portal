@@ -209,7 +209,8 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
     setFLoad(true);
     setFMsg('⏳ Reading Excel…');
     try {
-      const XLSX = (await import('xlsx')).default;
+      const xlsxModule = (await import('xlsx')) as any;
+      const XLSX = xlsxModule.default && xlsxModule.default.read ? xlsxModule.default : xlsxModule;
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];

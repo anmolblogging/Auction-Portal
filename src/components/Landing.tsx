@@ -118,6 +118,24 @@ export default function Landing({
   const [settingsMessage, setSettingsMessage] = useState('');
   const [history, setHistory] = useState<any[]>([]);
   const teamPhotoRef = useRef<HTMLInputElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [news, setNews] = useState<string[]>([
+    '🔴 LIVE: Virat Kohli SOLD ₹260L',
+    'Bumrah going ₹228L',
+    'New IPL 2025 room open',
+    'Rashid Khan SOLD ₹148L'
+  ]);
+
+  useEffect(() => {
+    fetch('/api/news')
+      .then(res => res.json())
+      .then(data => {
+        if (data.headlines && data.headlines.length > 0) {
+          setNews(data.headlines);
+        }
+      })
+      .catch(err => console.error('Failed to load news ticker:', err));
+  }, []);
 
   useEffect(() => {
     if (userId) {
@@ -270,9 +288,13 @@ export default function Landing({
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ background: 'var(--g)', overflow: 'hidden', whiteSpace: 'nowrap', padding: '5px 0' }}>
-        <span style={{ display: 'inline-block', animation: 'ticker 24s linear infinite', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 12, color: '#000', letterSpacing: 1 }}>
-          🔴 LIVE: Virat Kohli SOLD ₹260L &nbsp;•&nbsp; Bumrah going ₹228L &nbsp;•&nbsp; New IPL 2025 room open &nbsp;•&nbsp; Rashid Khan SOLD ₹148L &nbsp;•&nbsp; AI auto-priced 12 players from Wikipedia &nbsp;•&nbsp;
+      <div 
+        style={{ background: 'var(--g)', overflow: 'hidden', whiteSpace: 'nowrap', padding: '5px 0' }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <span style={{ display: 'inline-block', animation: 'ticker 24s linear infinite', animationPlayState: isHovered ? 'paused' : 'running', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 12, color: '#000', letterSpacing: 1 }}>
+          {news.join(' \u00A0•\u00A0 ')} &nbsp;•&nbsp;
         </span>
       </div>
 
@@ -373,13 +395,28 @@ export default function Landing({
       </div>
       </div>
 
-      <div style={{ padding: '44px clamp(16px,4vw,40px)', background: 'var(--bg2)', borderTop: '1px solid var(--bd)' }}>
-        <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 44, letterSpacing: 3, textAlign: 'center', marginBottom: 28 }}>WHAT&apos;S INSIDE</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ padding: '64px clamp(16px,4vw,40px)', background: 'linear-gradient(to bottom, var(--bg) 0%, var(--bg2) 100%)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', height: 1, background: 'linear-gradient(90deg, transparent, var(--g), transparent)', opacity: 0.3 }} />
+        
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <div style={{ display: 'inline-block', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, color: 'var(--g)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12, padding: '6px 14px', background: 'rgba(0,220,114,0.1)', borderRadius: 20, border: '1px solid rgba(0,220,114,0.2)' }}>
+            Platform Features
+          </div>
+          <h2 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(40px, 6vw, 56px)', letterSpacing: 3, color: 'var(--t1)', margin: 0 }}>
+            WHAT&apos;S <span style={{ color: 'var(--g)' }}>INSIDE</span>
+          </h2>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24, maxWidth: 1100, margin: '0 auto', position: 'relative', zIndex: 1 }}>
           {FEATURES.map(([icon, title, desc]) => (
-            <div key={title} className="card" style={{ padding: 18 }}>
-              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 17, fontWeight: 700, color: 'var(--t1)', marginBottom: 7 }}>{icon} {title}</div>
-              <p style={{ color: 'var(--t2)', fontSize: 13, lineHeight: 1.55 }}>{desc}</p>
+            <div key={title} className="card hover-lift" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 16, border: '1px solid rgba(255,255,255,0.06)', background: 'linear-gradient(145deg, rgba(255,255,255,0.03) 0%, transparent 100%)', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+              <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(0,220,114,0.1)', border: '1px solid rgba(0,220,114,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, boxShadow: '0 0 20px rgba(0,220,114,0.1) inset' }}>
+                {icon}
+              </div>
+              <div>
+                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 20, fontWeight: 700, color: 'var(--t1)', marginBottom: 8, letterSpacing: 0.5 }}>{title}</div>
+                <p style={{ color: 'var(--t2)', fontSize: 14, lineHeight: 1.6 }}>{desc}</p>
+              </div>
             </div>
           ))}
         </div>
