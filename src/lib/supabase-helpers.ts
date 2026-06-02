@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { supabase } from './supabase';
+import { supabaseAdmin as supabase } from './supabase-admin';
 import { Database } from './supabase-types';
 
 export type RoomRow = Database['public']['Tables']['rooms']['Row'];

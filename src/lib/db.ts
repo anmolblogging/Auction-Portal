@@ -5,7 +5,7 @@ import os from 'os';
 import { getFullRoomState } from './supabase-helpers';
 import { ServerRoom } from './types';
 export type { ServerRoom } from './types';
-import { supabase } from './supabase';
+import { supabaseAdmin as supabase } from './supabase-admin';
 import { createHash } from 'crypto';
 
 // --- Local / File Database Configuration (Resilient Fallback) ---
@@ -37,6 +37,15 @@ export function getDeterministicUuid(str: string): string {
   }
   const hash = createHash('md5').update(str).digest('hex');
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(12, 15)}-8${hash.slice(15, 18)}-${hash.slice(18, 30)}`;
+}
+
+// Resolve a player's stored DB UUID the SAME way the players table is keyed,
+// so foreign keys that reference it (e.g. bids.player_id) always line up.
+// Players created via the API already carry a UUID id, so re-hashing them would
+// produce a different UUID and break the bids -> players foreign key.
+function getPlayerDbId(roomId: string, playerId: string | number): string {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(playerId));
+  return isUuid ? String(playerId) : getDeterministicUuid(`${roomId}-player-${playerId}`);
 }
 
 // Dynamically seed users table for relational references
@@ -361,8 +370,7 @@ export async function saveRoom(room: ServerRoom): Promise<void> {
             status = 'current';
           }
 
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(p.id));
-          const dbPlayerId = isUuid ? String(p.id) : getDeterministicUuid(`${room.id}-player-${p.id}`);
+          const dbPlayerId = getPlayerDbId(room.id, p.id);
 
           return {
             id: dbPlayerId,
@@ -412,7 +420,7 @@ export async function saveRoom(room: ServerRoom): Promise<void> {
           const bidId = getDeterministicUuid(`${room.id}-bid-${b.id}-${b.bidder}-${b.amount}`);
           const dbTeamId = getDeterministicUuid(`${room.id}-${b.bidder}`);
           const activePlayer = room.players[room.playerIdx] || room.players[0];
-          const dbPlayerId = getDeterministicUuid(`${room.id}-player-${activePlayer.id}`);
+          const dbPlayerId = getPlayerDbId(room.id, activePlayer.id);
           return {
             id: bidId,
             room_id: dbRoomId,
