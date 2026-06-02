@@ -54,7 +54,7 @@ export async function POST(
       }
 
       // ─────────────────────────────────────────────────────────────────
-      // BID: Use targeted DB write — tries atomic RPC first, then helper
+      // BID: Use safe saveRoom pattern to avoid DB mapping issues
       // ─────────────────────────────────────────────────────────────────
       case 'BID': {
         const { bidder, amount } = action;
@@ -87,84 +87,21 @@ export async function POST(
         // Calculate new timer (extend but cap at BID_TIMER_MS from now)
         const newEndsAt = Math.min((room.endsAt || now) + BID_EXTENSION_MS, now + BID_TIMER_MS);
 
-        // Resolve DB UUIDs needed for the targeted writes
-        const dbTeamId = getDeterministicUuid(`${roomId}-${bidder}`);
-        const activePlayer = room.players[room.playerIdx];
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(activePlayer.id));
-        const dbPlayerId = isUuid ? String(activePlayer.id) : getDeterministicUuid(`${roomId}-player-${activePlayer.id}`);
+        // Mutate room state safely in memory
+        room.currentBid = nextBidVal;
+        room.currentBidder = bidder;
+        room.endsAt = newEndsAt;
+        room.bidHistory.unshift({ id: now, bidder, amount: nextBidVal });
+        room.bidHistory = room.bidHistory.slice(0, 30);
 
-        // If running in local DB fallback mode (no Supabase), use the old saveRoom pattern
-        if (!supabase) {
-          room.currentBid = nextBidVal;
-          room.currentBidder = bidder;
-          room.endsAt = newEndsAt;
-          room.bidHistory.unshift({ id: now, bidder, amount: nextBidVal });
-          room.bidHistory = room.bidHistory.slice(0, 30);
-          await saveRoom(room);
-          const freshRoom = await getRoom(roomId);
-          if (!freshRoom) return NextResponse.json({ error: 'Room not found after bid' }, { status: 404 });
-          const timeLeft = freshRoom.endsAt ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000)) : 60;
-          return NextResponse.json({ room: { ...freshRoom, timeLeft } });
-        }
-
-        // Try the atomic RPC first (requires the function to exist in Supabase)
-        let rpcSuccess = false;
-        try {
-          const { data: rpcResult, error: rpcError } = await (supabase as any).rpc('place_auction_bid', {
-            p_room_id: dbRoomId,
-            p_team_id: dbTeamId,
-            p_player_id: dbPlayerId,
-            p_amount: nextBidVal,
-            p_ends_at: newEndsAt,
-          });
-
-          if (!rpcError && rpcResult?.ok === true) {
-            rpcSuccess = true;
-          } else if (!rpcError && rpcResult?.ok === false) {
-            // DB-level validation rejected the bid (race condition caught!)
-            return NextResponse.json({ error: rpcResult.error || 'Bid rejected by server' }, { status: 409 });
-          }
-          // If rpcError (function not deployed yet), fall through to manual writes below
-        } catch (_rpcEx) {
-          // RPC not available — fall through
-        }
-
-        if (!rpcSuccess) {
-          // Fallback: manual targeted writes (still better than saveRoom blob)
-          const { error: bidInsertErr } = await (supabase as any).from('bids').insert({
-            room_id: dbRoomId,
-            team_id: dbTeamId,
-            player_id: dbPlayerId,
-            amount: nextBidVal,
-          });
-          if (bidInsertErr) {
-            console.error('Bid insert error:', bidInsertErr);
-            return NextResponse.json({ error: 'Failed to record bid' }, { status: 500 });
-          }
-
-          const { error: roomUpdateErr } = await (supabase as any)
-            .from('rooms')
-            .update({
-              current_bid: nextBidVal,
-              current_bidder: dbTeamId,
-              ends_at: newEndsAt,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', dbRoomId);
-          if (roomUpdateErr) {
-            console.error('Room update error:', roomUpdateErr);
-            return NextResponse.json({ error: 'Failed to update room' }, { status: 500 });
-          }
-        }
+        // Save the entire room back to database
+        await saveRoom(room);
 
         // Fetch fresh state to return accurate data
         const freshRoom = await getRoom(roomId);
-        if (!freshRoom) {
-          return NextResponse.json({ error: 'Room not found after bid' }, { status: 404 });
-        }
-        const timeLeft = freshRoom.endsAt
-          ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000))
-          : 60;
+        if (!freshRoom) return NextResponse.json({ error: 'Room not found after bid' }, { status: 404 });
+        
+        const timeLeft = freshRoom.endsAt ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000)) : 60;
         return NextResponse.json({ room: { ...freshRoom, timeLeft } });
       }
 
