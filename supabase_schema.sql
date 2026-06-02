@@ -126,3 +126,62 @@ CREATE POLICY "Enable insert for all bids" ON public.bids FOR INSERT WITH CHECK 
 
 CREATE POLICY "Enable read access for all chats" ON public.chat_messages FOR SELECT USING (true);
 CREATE POLICY "Enable insert for all chats" ON public.chat_messages FOR INSERT WITH CHECK (true);
+
+-- ============================================================
+-- Atomic Bidding RPC (prevents race conditions)
+-- Run this in: Supabase Dashboard → SQL Editor → New Query
+-- ============================================================
+CREATE OR REPLACE FUNCTION place_auction_bid(
+    p_room_id UUID,
+    p_team_id UUID,
+    p_player_id UUID,
+    p_amount BIGINT,
+    p_ends_at BIGINT
+) RETURNS JSONB AS $$
+DECLARE
+    v_current_bid    BIGINT;
+    v_team_budget    BIGINT;
+    v_team_spent     BIGINT;
+    v_phase          TEXT;
+BEGIN
+    -- Lock the room row to prevent concurrent modifications
+    SELECT current_bid, phase
+      INTO v_current_bid, v_phase
+      FROM public.rooms
+     WHERE id = p_room_id
+       FOR UPDATE;
+
+    IF v_phase <> 'bidding' THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'Bidding is not active');
+    END IF;
+
+    IF p_amount <= v_current_bid THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'Bid amount must exceed current bid');
+    END IF;
+
+    -- Lock the team row
+    SELECT budget, spent
+      INTO v_team_budget, v_team_spent
+      FROM public.teams
+     WHERE id = p_team_id
+       FOR UPDATE;
+
+    IF (v_team_spent + p_amount) > v_team_budget THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'Insufficient budget');
+    END IF;
+
+    -- Insert the bid record
+    INSERT INTO public.bids (room_id, team_id, player_id, amount)
+    VALUES (p_room_id, p_team_id, p_player_id, p_amount);
+
+    -- Update room with new bid state and extended timer
+    UPDATE public.rooms
+       SET current_bid     = p_amount,
+           current_bidder  = p_team_id,
+           ends_at         = p_ends_at,
+           updated_at      = now()
+     WHERE id = p_room_id;
+
+    RETURN jsonb_build_object('ok', true);
+END;
+$$ LANGUAGE plpgsql;

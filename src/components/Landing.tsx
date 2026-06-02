@@ -162,7 +162,7 @@ export default function Landing({
     try {
       const code = roomCode.trim().toUpperCase();
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
-      const res = await fetch(`/api/rooms/${formattedCode}`);
+      const res = await fetch(`/api/rooms/${formattedCode}?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.error) {
         throw new Error(data.error);

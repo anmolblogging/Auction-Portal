@@ -1,6 +1,6 @@
 'use client';
 /* eslint-disable react-hooks/purity */
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Player, RoomConfig } from '@/lib/types';
 import {
@@ -83,6 +83,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps) {
   const [step, setStep] = useState(1);
   const [roomId] = useState(() => `AUC-${Math.floor(1000 + Math.random() * 9000)}`);
+  // Use state for 'now' so it's only set client-side, preventing SSR hydration mismatch
+  const [clientNow, setClientNow] = useState<number | null>(null);
+  useEffect(() => { setClientNow(Date.now()); }, []);
   const [cfg, setCfg] = useState<RoomConfig & { enableBots: boolean }>({
     name: 'IPL Fantasy 2025',
     sport: 'Cricket / IPL',
@@ -505,7 +508,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
 
           {step === 3 && (() => {
             const getScheduleTs = () => new Date(`${scheduledDate}T${scheduledTime}`).getTime();
-            const isScheduleValid = launchMode === 'now' || getScheduleTs() > Date.now() + 60000;
+            const isScheduleValid = launchMode === 'now' || (clientNow !== null && getScheduleTs() > clientNow + 60000);
             const scheduleLabel = launchMode === 'schedule'
               ? new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
               : '';

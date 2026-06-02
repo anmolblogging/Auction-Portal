@@ -9,6 +9,7 @@ import BarChart from '@/components/charts/BarChart';
 import DonutChart from '@/components/charts/DonutChart';
 import Spinner from '@/components/ui/Spinner';
 import { ServerRoom } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 import { playBidSound, playCountdownSound, playSoldSound } from '@/lib/sounds';
 
 const BID_TIMER_SECONDS = 60;
@@ -106,30 +107,61 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     URL.revokeObjectURL(url);
   };
 
-  // Poll room state every 1 second
+  // Subscribe to Supabase Realtime for instant updates; initial fetch on mount
   useEffect(() => {
     let active = true;
 
     async function fetchState() {
       try {
-        const res = await fetch(`/api/rooms/${roomId}`);
+        const res = await fetch(`/api/rooms/${roomId}?t=${Date.now()}`, { cache: 'no-store' });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-
-        if (active) {
-          setRoomState(data.room);
-        }
+        if (active) setRoomState(data.room);
       } catch (err) {
-        console.error('Error polling room state:', err);
+        console.error('Error fetching room state:', err);
       }
     }
 
+    // Fetch once immediately
     fetchState();
-    const interval = setInterval(fetchState, 1000);
+
+    // Subscribe via WebSocket — triggers fetchState() when room row changes.
+    // This replaces the 1-second HTTP polling loop and eliminates the DB hammering.
+    // Guard: supabase is null when NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are missing (local file fallback mode).
+    if (!supabase) {
+      return () => { active = false; };
+    }
+
+    const channelName = `room-changes-${roomId}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'rooms' },
+        () => {
+          // Re-fetch full room state (includes teams, bids, chat via getRoom)
+          if (active) fetchState();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        () => {
+          if (active) fetchState();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'bids' },
+        () => {
+          if (active) fetchState();
+        }
+      )
+      .subscribe();
 
     return () => {
       active = false;
-      clearInterval(interval);
+      supabase!.removeChannel(channel);
     };
   }, [roomId]);
 
