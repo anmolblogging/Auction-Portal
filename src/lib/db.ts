@@ -224,6 +224,7 @@ export async function getRoom(roomId: string): Promise<ServerRoom | null> {
         currentBidder: room.current_bidder ? getOriginalTeamId(room.current_bidder) : null,
         endsAt: room.ends_at,
         scheduledAt: room.scheduled_at,
+        passedBy: Array.isArray((room as any).passed_by) ? (room as any).passed_by : [],
         hostId: userMap.get(room.host_id) || room.host_id,
         createdAt: new Date(room.created_at).getTime(),
         updatedAt: new Date(room.updated_at).getTime(),
@@ -316,6 +317,7 @@ export async function saveRoom(room: ServerRoom): Promise<void> {
         current_bidder: room.currentBidder ? getDeterministicUuid(`${room.id}-${room.currentBidder}`) : null,
         ends_at: room.endsAt,
         scheduled_at: room.scheduledAt,
+        passed_by: room.passedBy || [],
         updated_at: new Date().toISOString()
       });
       if (roomErr) throw roomErr;

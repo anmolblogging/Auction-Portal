@@ -346,6 +346,61 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     }
   }
 
+  async function handleSkip() {
+    if (!roomState || roomState.phase !== 'bidding' || submitting) return;
+    const msg = roomState.currentBidder
+      ? 'Skip this player? The current standing bid will be discarded and the player marked unsold.'
+      : 'Skip this player? With no bids placed, they will be marked unsold and the auction moves on.';
+    if (!confirm(msg)) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: { type: 'SKIP' },
+          userId,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+      } else {
+        setRoomState(data.room);
+      }
+    } catch (err) {
+      console.error('Failed to skip player:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handlePass() {
+    if (!roomState || roomState.phase !== 'bidding' || submitting) return;
+    if (roomState.currentBidder === teamId) return; // can't pass while winning
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: { type: 'PASS', bidder: teamId },
+          userId,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(data.error);
+      } else {
+        setRoomState(data.room);
+      }
+    } catch (err) {
+      console.error('Failed to pass:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSendChat() {
     if (!chatMsg.trim() || !roomState) return;
     const msgToSend = chatMsg.trim();
@@ -539,6 +594,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   const win = roomState.participants.find((p) => p.id === roomState.currentBidder);
   const tc = timeLeft > 10 ? 'var(--g)' : timeLeft > 5 ? 'var(--am)' : 'var(--re)';
   const isEnd = roomState.phase === 'sold' || roomState.phase === 'unsold' || roomState.phase === 'done';
+  const isHost = roomState.hostId === userId;
+  const canSkip = roomState.phase === 'bidding';
+  const hasPassed = !!roomState.passedBy?.includes(teamId);
+  const isHighBidder = roomState.currentBidder === teamId;
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
@@ -668,12 +727,19 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
                 {/* Bid controls */}
                 <div className="card" style={{ padding: 13 }}>
-                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 9 }}>Your Bid</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
+                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase' }}>Your Bid</div>
+                    {hasPassed && (
+                      <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--re)', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '3px 8px' }}>
+                        🙅 You passed
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 9 }}>
                     {[10, 25, 50, 100, 200].map((inc) => (
                       <button key={inc} className="btn bs"
                         onClick={() => handleBid(inc)}
-                        disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || submitting || (me && me.spent + roomState.currentBid + inc > me.budget)}
+                        disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || hasPassed || submitting || (me && me.spent + roomState.currentBid + inc > me.budget)}
                         style={{
                           flex: 1,
                           minWidth: 64,
@@ -690,12 +756,61 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   </div>
                   <div style={{ display: 'flex', gap: 7 }}>
                     <input className="inp" type="number" placeholder="Custom increment" value={customBid} onChange={(e) => setCustomBid(e.target.value)} style={{ flex: 1, height: 46, fontSize: 14 }} />
-                    <button className="btn bp" disabled={roomState.phase !== 'bidding' || !customBid || submitting}
+                    <button className="btn bp" disabled={roomState.phase !== 'bidding' || !customBid || hasPassed || submitting}
                       onClick={() => { const v = parseInt(customBid); if (v > 0) { handleBid(v); setCustomBid(''); } }}
                       style={{ height: 46, padding: '0 24px', fontSize: 15 }}>
                       Bid!
                     </button>
                   </div>
+
+                  {/* Pass — opt out of the current player */}
+                  {!isHighBidder && (
+                    <button
+                      className="btn bs"
+                      onClick={handlePass}
+                      disabled={roomState.phase !== 'bidding' || hasPassed || submitting}
+                      title={hasPassed ? 'You have passed on this player' : 'Pass — opt out of bidding on this player'}
+                      style={{
+                        width: '100%',
+                        marginTop: 9,
+                        padding: '11px 6px',
+                        fontSize: 13,
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontWeight: 700,
+                        letterSpacing: 1,
+                        borderWidth: 2,
+                        borderColor: 'var(--bd2)',
+                        opacity: (hasPassed || roomState.phase !== 'bidding') ? 0.45 : 1,
+                        cursor: (hasPassed || roomState.phase !== 'bidding') ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {hasPassed ? '🙅 Passed' : '🙅 Pass on this player'}
+                    </button>
+                  )}
+                  {isHost && (
+                    <button
+                      className="btn bs"
+                      onClick={handleSkip}
+                      disabled={!canSkip || submitting}
+                      title={roomState.currentBidder ? 'Skip — discards the standing bid and moves to the next player' : 'Skip this player and move on (no bids)'}
+                      style={{
+                        width: '100%',
+                        marginTop: 9,
+                        padding: '12px 6px',
+                        fontSize: 14,
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontWeight: 700,
+                        letterSpacing: 1,
+                        borderWidth: 2,
+                        borderColor: 'var(--am)',
+                        color: 'var(--am)',
+                        opacity: canSkip ? 1 : 0.45,
+                        cursor: canSkip ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      ⏭️ {roomState.currentBidder ? 'Skip Player (discard bid)' : 'Skip Player — No Bids'}
+                    </button>
+                  )}
                   {me && (
                     <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--t2)', fontSize: 11, alignItems: 'center', background: 'var(--bg3)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--bd2)' }}>

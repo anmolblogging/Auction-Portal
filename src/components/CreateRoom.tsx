@@ -1,5 +1,4 @@
 'use client';
-/* eslint-disable react-hooks/purity */
 import { useRef, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Player, RoomConfig } from '@/lib/types';
@@ -83,9 +82,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps) {
   const [step, setStep] = useState(1);
   const [roomId] = useState(() => `AUC-${Math.floor(1000 + Math.random() * 9000)}`);
-  // Use state for 'now' so it's only set client-side, preventing SSR hydration mismatch
+  // Use state for 'now' so it's only set client-side, preventing SSR hydration mismatch.
+  // Reading Date.now() must be deferred to a post-hydration effect, so this setState is intentional.
   const [clientNow, setClientNow] = useState<number | null>(null);
-  useEffect(() => { setClientNow(Date.now()); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only value, deferred past hydration
+    setClientNow(Date.now());
+  }, []);
   const [cfg, setCfg] = useState<RoomConfig & { enableBots: boolean }>({
     name: 'IPL Fantasy 2025',
     sport: 'Cricket / IPL',
@@ -212,8 +215,9 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
     setFLoad(true);
     setFMsg('⏳ Reading Excel…');
     try {
-      const xlsxModule = (await import('xlsx')) as any;
-      const XLSX = xlsxModule.default && xlsxModule.default.read ? xlsxModule.default : xlsxModule;
+      type XlsxModule = typeof import('xlsx');
+      const xlsxModule = (await import('xlsx')) as XlsxModule & { default?: XlsxModule };
+      const XLSX = xlsxModule.default ?? xlsxModule;
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];

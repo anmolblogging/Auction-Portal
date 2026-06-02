@@ -77,6 +77,7 @@ function updateRoomStatus(room: ServerRoom): boolean {
       room.playerIdx = ni;
       room.currentBid = room.players[ni].base;
       room.currentBidder = null;
+      room.passedBy = [];
       room.endsAt = now + BID_TIMER_MS;
     }
     changed = true;
@@ -172,6 +173,7 @@ export async function GET(
       room.playerIdx = 0;
       room.currentBid = room.players[0]?.base || 50;
       room.currentBidder = null;
+      room.passedBy = [];
       room.endsAt = Date.now() + BID_TIMER_MS;
       modified = true;
     }

@@ -2,7 +2,16 @@
 import { useRef, useState, useEffect } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { AuthSession, ManagedUser } from '@/lib/auth';
+import type { AuctionPhase } from '@/lib/types';
 import Avatar from '@/components/ui/Avatar';
+
+interface RoomHistoryEntry {
+  id: string;
+  name: string;
+  sport: string;
+  phase: AuctionPhase;
+  updatedAt: number;
+}
 
 interface LandingProps {
   userId: string;
@@ -116,7 +125,7 @@ export default function Landing({
   const [settingsForm, setSettingsForm] = useState({ userId: '', password: '' });
   const [settingsError, setSettingsError] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<RoomHistoryEntry[]>([]);
   const teamPhotoRef = useRef<HTMLInputElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [news, setNews] = useState<string[]>([

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.rooms (
     current_bidder UUID, -- Will reference teams(id) once created
     ends_at BIGINT, -- Timestamp in ms
     scheduled_at BIGINT, -- Timestamp in ms
+    passed_by JSONB NOT NULL DEFAULT '[]'::jsonb, -- Team IDs that passed on the current player
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -126,6 +127,30 @@ CREATE POLICY "Enable insert for all bids" ON public.bids FOR INSERT WITH CHECK 
 
 CREATE POLICY "Enable read access for all chats" ON public.chat_messages FOR SELECT USING (true);
 CREATE POLICY "Enable insert for all chats" ON public.chat_messages FOR INSERT WITH CHECK (true);
+
+-- ============================================================
+-- Realtime: the web app subscribes to live changes on these
+-- tables (room phase/timer/bid updates, new chat, new bids).
+-- Without this, other players won't see updates until the
+-- 3-second fallback poll. Wrapped so re-running is safe.
+-- ============================================================
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.rooms;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.bids;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================
 -- Atomic Bidding RPC (prevents race conditions)

@@ -48,6 +48,7 @@ export interface Database {
           current_bidder: string | null
           ends_at: number | null
           scheduled_at: number | null
+          passed_by: Json
           created_at: string
           updated_at: string
         }
@@ -66,6 +67,7 @@ export interface Database {
           current_bidder?: string | null
           ends_at?: number | null
           scheduled_at?: number | null
+          passed_by?: Json
           created_at?: string
           updated_at?: string
         }
@@ -84,6 +86,7 @@ export interface Database {
           current_bidder?: string | null
           ends_at?: number | null
           scheduled_at?: number | null
+          passed_by?: Json
           created_at?: string
           updated_at?: string
         }

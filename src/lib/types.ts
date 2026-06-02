@@ -72,6 +72,8 @@ export interface ServerRoom extends AuctionState {
   hostId?: string;
   createdAt?: number;
   updatedAt?: number;
+  // Team IDs that have passed (opted out) on the CURRENT player. Reset each player.
+  passedBy?: string[];
 }
 
 
@@ -79,6 +81,8 @@ export type AuctionAction =
   | { type: 'TICK' }
   | { type: 'BID'; bidder: string; amount: number }
   | { type: 'NEXT' }
+  | { type: 'SKIP' }
+  | { type: 'PASS'; bidder: string }
   | { type: 'CHAT'; msg: string; user?: string };
 
 export interface RoomConfig {

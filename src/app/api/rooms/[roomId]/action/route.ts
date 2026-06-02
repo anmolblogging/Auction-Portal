@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { getRoom, saveRoom, getDeterministicUuid } from '@/lib/db';
-import { supabase } from '@/lib/supabase';
+import { getRoom, saveRoom } from '@/lib/db';
 
 const BID_TIMER_MS = 60000;
 const BID_EXTENSION_MS = 20000;
@@ -29,7 +28,6 @@ export async function POST(
     }
 
     const now = Date.now();
-    const dbRoomId = getDeterministicUuid(roomId);
 
     switch (action.type) {
       // ─────────────────────────────────────────────────────────────────
@@ -47,6 +45,7 @@ export async function POST(
         room.playerIdx = 0;
         room.currentBid = room.players[0].base;
         room.currentBidder = null;
+        room.passedBy = [];
         room.endsAt = now + BID_TIMER_MS;
 
         await saveRoom(room);
@@ -78,6 +77,10 @@ export async function POST(
           return NextResponse.json({ error: 'You are already the highest bidder' }, { status: 400 });
         }
 
+        if (room.passedBy?.includes(bidder)) {
+          return NextResponse.json({ error: 'You passed on this player and can no longer bid' }, { status: 400 });
+        }
+
         const nextBidVal = room.currentBid + amount;
 
         if (team.spent + nextBidVal > team.budget) {
@@ -96,6 +99,79 @@ export async function POST(
 
         // Save the entire room back to database
         await saveRoom(room);
+
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+        return NextResponse.json({ room: { ...room, timeLeft } });
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // SKIP: Host force-moves past the current player at any time.
+      // Marks the player unsold with a short transition, then the GET
+      // route's updateRoomStatus advances the queue. Any standing bid is
+      // discarded (the player goes unsold, not sold).
+      // ─────────────────────────────────────────────────────────────────
+      case 'SKIP': {
+        if (room.hostId !== userId) {
+          return NextResponse.json({ error: 'Only the host can skip a player' }, { status: 403 });
+        }
+        if (room.phase !== 'bidding') {
+          return NextResponse.json({ error: 'Can only skip during active bidding' }, { status: 400 });
+        }
+
+        const skipped = room.players[room.playerIdx];
+        const hadBid = !!room.currentBidder;
+        room.phase = 'unsold';
+        room.currentBidder = null;
+        room.endsAt = now + 1500; // brief "UNSOLD" flash, then the queue auto-advances
+        room.chat.push({
+          id: now,
+          user: 'System',
+          msg: hadBid
+            ? `⏭️ Host skipped ${skipped?.name ?? 'the player'} — standing bid discarded.`
+            : `⏭️ Host skipped ${skipped?.name ?? 'the player'} — no bids.`,
+        });
+        room.chat = room.chat.slice(-60);
+
+        await saveRoom(room);
+
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 0;
+        return NextResponse.json({ room: { ...room, timeLeft } });
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // PASS: A participant opts out of bidding on the CURRENT player.
+      // They can't bid again until the next player. Purely per-player;
+      // reset whenever the auction advances.
+      // ─────────────────────────────────────────────────────────────────
+      case 'PASS': {
+        const { bidder } = action;
+
+        if (room.phase !== 'bidding') {
+          return NextResponse.json({ error: 'Bidding is not active' }, { status: 400 });
+        }
+
+        const team = room.participants.find((p: any) => p.id === bidder);
+        if (!team) {
+          return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+        }
+        if (team.ownerId !== userId) {
+          return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
+        }
+        if (bidder === room.currentBidder) {
+          return NextResponse.json({ error: "You're the highest bidder — you can't pass" }, { status: 400 });
+        }
+
+        if (!room.passedBy) room.passedBy = [];
+        if (!room.passedBy.includes(bidder)) {
+          room.passedBy.push(bidder);
+          room.chat.push({
+            id: now,
+            user: 'System',
+            msg: `🙅 ${team.name} passed on ${room.players[room.playerIdx]?.name ?? 'this player'}.`,
+          });
+          room.chat = room.chat.slice(-60);
+          await saveRoom(room);
+        }
 
         const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
         return NextResponse.json({ room: { ...room, timeLeft } });
