@@ -100,7 +100,7 @@ export async function POST(
         // Save the entire room back to database
         await saveRoom(room);
 
-        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
         return NextResponse.json({ room: { ...room, timeLeft } });
       }
 
@@ -173,7 +173,7 @@ export async function POST(
           await saveRoom(room);
         }
 
-        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
         return NextResponse.json({ room: { ...room, timeLeft } });
       }
 
@@ -191,7 +191,7 @@ export async function POST(
         room.chat = room.chat.slice(-60);
         await saveRoom(room);
         
-        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+        const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
         return NextResponse.json({ room: { ...room, timeLeft } });
       }
 
@@ -206,7 +206,7 @@ export async function POST(
     }
     const timeLeft = freshRoom.endsAt
       ? Math.max(0, Math.ceil((freshRoom.endsAt - Date.now()) / 1000))
-      : 60;
+      : 30;
 
     return NextResponse.json({ room: { ...freshRoom, timeLeft } });
   } catch (error: any) {

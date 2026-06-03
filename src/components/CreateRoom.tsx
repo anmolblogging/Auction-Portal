@@ -397,8 +397,8 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                   </div>
 
                   <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '12px 16px', border: '1px solid var(--bd2)', fontSize: 14, color: 'var(--t2)', lineHeight: 1.5 }}>
-                    ⏱️ Timer fixed at <b style={{ color: 'var(--g)' }}>60 seconds</b> per player.<br />
-                    Every bid extends the clock by <b style={{ color: 'var(--am)' }}>20 seconds</b> (max 60s).
+                    ⏱️ Timer fixed at <b style={{ color: 'var(--g)' }}>30 seconds</b> per player.<br />
+                    Every bid extends the clock by <b style={{ color: 'var(--am)' }}>20 seconds</b> (max 30s).
                   </div>
                 </div>
               </div>
@@ -550,7 +550,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                       ['🏏', cfg.sport],
                       ['💰', `₹${cfg.budget}L per team`],
                       ['📋', `${players.length} players`],
-                      ['⏱️', '60s timer · +20s per bid'],
+                      ['⏱️', '30s timer · +20s per bid'],
                     ].map(([icon, value]) => (
                       <div key={value} style={{ background: 'var(--bg3)', padding: '10px 13px', borderRadius: 8, border: '1px solid var(--bd)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, color: 'var(--t1)', fontSize: 13 }}>
                         {icon} {value}

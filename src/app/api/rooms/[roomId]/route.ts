@@ -193,7 +193,7 @@ export async function GET(
     }
 
     // Calculate time left to return to client
-    const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 60;
+    const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
 
     return NextResponse.json({
       room: {
