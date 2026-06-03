@@ -5,6 +5,7 @@ import type { AuthSession, ManagedUser } from '@/lib/auth';
 import type { AuctionPhase } from '@/lib/types';
 import Avatar from '@/components/ui/Avatar';
 import FixturesBar from '@/components/FixturesBar';
+import WorldCupQuiz from '@/components/WorldCupQuiz';
 
 interface RoomHistoryEntry {
   id: string;
@@ -111,6 +112,7 @@ export default function Landing({
   onToggleUser,
 }: LandingProps) {
   const [showJoin, setShowJoin] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [loginIntent, setLoginIntent] = useState<'nav' | 'host'>('nav');
@@ -309,6 +311,7 @@ export default function Landing({
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button className="btn bs bsm" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
           <button className="btn bs bsm" onClick={() => setShowJoin(true)}>Join Room</button>
           {authSession ? (
             <>
@@ -405,6 +408,8 @@ export default function Landing({
           ))}
         </div>
       </div>
+
+      {showQuiz && <WorldCupQuiz onClose={() => setShowQuiz(false)} />}
 
       {showJoin && (
         <div style={overlayStyle}>

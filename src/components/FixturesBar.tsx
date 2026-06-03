@@ -129,7 +129,8 @@ export default function FixturesBar() {
   );
 
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', background: 'var(--bg2)', borderBottom: '1px solid var(--bd)', height: 56 }}>
+    <div style={{ padding: '12px 0', background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', background: 'var(--bg2)', borderTop: '1px solid var(--bd)', borderBottom: '1px solid var(--bd)', height: 56 }}>
       {/* Filter / label */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', borderRight: '1px solid var(--bd)', background: 'var(--bg)', flexShrink: 0 }}>
         <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: 'var(--g)', letterSpacing: 1.5, whiteSpace: 'nowrap' }}>
@@ -182,6 +183,7 @@ export default function FixturesBar() {
           <Card key={fx.id} fx={fx} />
         ))}
       </div>
+    </div>
     </div>
   );
 }
