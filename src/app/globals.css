@@ -89,13 +89,17 @@ html,body{max-width:100%;overflow-x:hidden}
 /* ── Mobile / responsive ── */
 @media(max-width:900px){
   /* The auction page is a fixed-height, clipped flex column on desktop. On
-     mobile let the whole page grow and scroll vertically, and stack the three
-     auction panes. External !important overrides the inline styles. */
+     mobile/tablet let the whole page grow and scroll vertically, and stack the
+     three panes by PRIORITY: the live player + bidding first, then the teams,
+     then history/chat. External !important overrides the inline styles. */
   .auction-root{height:auto !important;min-height:100vh;overflow:visible !important}
-  .auction-grid{grid-template-columns:1fr;height:auto;overflow:visible}
-  .auction-grid>*{overflow:visible !important;border-right:none !important;max-height:none !important}
-  /* Tab strip scrolls sideways instead of overflowing the header */
-  .auction-tabs{overflow-x:auto;flex-wrap:nowrap;min-width:0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .auction-grid{display:flex !important;flex-direction:column;height:auto;overflow:visible}
+  .auction-grid>*{overflow:visible !important;border-right:none !important;border-left:none !important;max-height:none !important;width:auto}
+  .auction-main{order:1}
+  .auction-teams{order:2;border-top:1px solid var(--bd)}
+  .auction-chat{order:3;border-top:1px solid var(--bd);max-height:70vh}
+  /* Tab strip shrinks + scrolls sideways instead of overflowing the header */
+  .auction-tabs{flex:1 1 auto;overflow-x:auto;flex-wrap:nowrap;min-width:0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .auction-tabs::-webkit-scrollbar{height:0}
 }
 @media(max-width:700px){

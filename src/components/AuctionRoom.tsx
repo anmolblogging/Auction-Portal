@@ -665,7 +665,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       {tab === 'live' && (
         <div className="auction-grid" style={{ flex: 1 }}>
           {/* Left: Team sidebar */}
-          <div style={{ background: 'var(--bg2)', borderRight: '1px solid var(--bd)', overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="auction-teams" style={{ background: 'var(--bg2)', borderRight: '1px solid var(--bd)', overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 4 }}>Teams</div>
             {roomState.participants.map((p) => {
               const isBidder = roomState.currentBidder === p.id;
@@ -701,7 +701,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           </div>
 
           {/* Center: Bidding */}
-          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', padding: 14, gap: 11 }}>
+          <div className="auction-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', padding: 14, gap: 11 }}>
             {isEnd ? (
               <div key={`end${roomState.playerIdx}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                 <div key={roomState.phase} className={roomState.phase === 'sold' ? 'anim-stamp' : ''} style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 80, letterSpacing: 5, color: roomState.phase === 'sold' ? 'var(--g)' : roomState.phase === 'done' ? 'var(--g)' : 'var(--t3)', textShadow: roomState.phase === 'sold' ? '0 0 44px rgba(0,220,114,.4)' : 'none' }}>
@@ -774,7 +774,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 9 }}>
-                    {[10, 20].map((inc) => (
+                    {[50, 100].map((inc) => (
                       <button key={inc} className="btn bp"
                         onClick={() => handleBid(inc)}
                         disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || hasPassed || submitting || (me && me.spent + roomState.currentBid + inc > me.budget)}
@@ -898,7 +898,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           </div>
 
           {/* Right: History + Chat */}
-          <div ref={rightPanelRef} style={{ background: 'var(--bg2)', borderLeft: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+          <div ref={rightPanelRef} className="auction-chat" style={{ background: 'var(--bg2)', borderLeft: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
             {/* Bid History */}
             <div style={{ height: `${splitPct}%`, overflow: 'auto', padding: 10, flexShrink: 0 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 7 }}>Bid History</div>

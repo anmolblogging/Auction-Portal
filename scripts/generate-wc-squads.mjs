@@ -22,7 +22,7 @@ const CONCURRENCY = 5;
 
 const POSITION = { G: 'Goalkeeper', D: 'Defender', M: 'Midfielder', F: 'Forward' };
 const POSITION_ORDER = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Forward: 3 };
-const POSITION_ADJ = { Forward: 15, Midfielder: 8, Defender: 3, Goalkeeper: 0 };
+const POSITION_ADJ = { Forward: 100, Midfielder: 50, Defender: 20, Goalkeeper: 0 };
 
 // Market-value bands (EUR) -> tier. Performance proxy, country-agnostic.
 function tierForValue(mv) {
@@ -32,7 +32,8 @@ function tierForValue(mv) {
   if (mv >= 4_000_000) return 4;
   return 5;
 }
-const TIER_BASE = { 1: 160, 2: 120, 3: 85, 4: 60, 5: 42 };
+// Base (starting) prices tuned for a ~10,000L per-team budget.
+const TIER_BASE = { 1: 900, 2: 550, 3: 320, 4: 160, 5: 80 };
 
 function initials(name) {
   const parts = name.trim().split(/\s+/);

@@ -95,7 +95,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
     sport: 'Cricket / IPL',
     tournament: 'IPL 2025',
     participants: 4,
-    budget: 1500,
+    budget: 10000,
     squadSize: 11,
     enableBots: true,
   });
@@ -399,7 +399,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
 
                   <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '12px 16px', border: '1px solid var(--bd2)', fontSize: 14, color: 'var(--t2)', lineHeight: 1.5 }}>
                     ⏱️ Timer fixed at <b style={{ color: 'var(--g)' }}>30 seconds</b> per player.<br />
-                    Every bid extends the clock by <b style={{ color: 'var(--am)' }}>20 seconds</b> (max 30s).
+                    Every bid extends the clock by <b style={{ color: 'var(--am)' }}>15 seconds</b> (max 30s).
                   </div>
                 </div>
               </div>
@@ -551,7 +551,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                       ['🏏', cfg.sport],
                       ['💰', `₹${cfg.budget}L per team`],
                       ['📋', `${players.length} players`],
-                      ['⏱️', '30s timer · +20s per bid'],
+                      ['⏱️', '30s timer · +15s per bid'],
                     ].map(([icon, value]) => (
                       <div key={value} style={{ background: 'var(--bg3)', padding: '10px 13px', borderRadius: 8, border: '1px solid var(--bd)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, color: 'var(--t1)', fontSize: 13 }}>
                         {icon} {value}

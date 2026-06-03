@@ -39,6 +39,16 @@ export function getDeterministicUuid(str: string): string {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(12, 15)}-8${hash.slice(15, 18)}-${hash.slice(18, 30)}`;
 }
 
+// Build a player UUID whose lexicographic order matches the auction index, so
+// that reading the players table back ORDER BY id returns them in auction order
+// (Tier 1 -> Tier 5, with the within-tier shuffle preserved). The first 8 hex
+// chars encode the zero-padded index; the rest stay unique + a valid UUID.
+export function getOrderedPlayerUuid(roomId: string, idx: number): string {
+  const idxHex = (idx >>> 0).toString(16).padStart(8, '0').slice(-8);
+  const h = createHash('md5').update(`${roomId}-player-${idx}`).digest('hex');
+  return `${idxHex}-${h.slice(0, 4)}-4${h.slice(4, 7)}-8${h.slice(7, 10)}-${h.slice(10, 22)}`;
+}
+
 // Resolve a player's stored DB UUID the SAME way the players table is keyed,
 // so foreign keys that reference it (e.g. bids.player_id) always line up.
 // Players created via the API already carry a UUID id, so re-hashing them would
@@ -278,18 +288,24 @@ export async function getRoom(roomId: string): Promise<ServerRoom | null> {
           buyer: p.team_id ? getOriginalTeamId(p.team_id) : '',
           price: p.sold_price || 0
         })),
-        unsoldLog: players.filter(p => p.status === 'unsold').map(p => ({
-          id: p.id,
-          name: p.name,
-          country: p.country,
-          role: p.role,
-          tier: p.tier,
-          base: p.base_price,
-          img: p.image || '',
-          nat: p.nat || '',
-          bio: p.bio || '',
-          soldPrice: p.sold_price || undefined
-        })) as any,
+        // Only players that have ALREADY come up (index < current) and weren't
+        // sold count as unsold. Players read back in auction order (their UUID
+        // encodes the index), so anything from playerIdx onward is upcoming, not
+        // unsold.
+        unsoldLog: players
+          .filter((p, i) => i < room.player_idx && p.status !== 'sold' && !p.team_id)
+          .map(p => ({
+            id: p.id,
+            name: p.name,
+            country: p.country,
+            role: p.role,
+            tier: p.tier,
+            base: p.base_price,
+            img: p.image || '',
+            nat: p.nat || '',
+            bio: p.bio || '',
+            soldPrice: p.sold_price || undefined
+          })) as any,
       } as ServerRoom;
     } catch (e) {
       console.error('Supabase getRoom failed:', e);

@@ -7,7 +7,7 @@ import { getRoom, saveRoom, cleanInactiveRooms, ServerRoom } from '@/lib/db';
 import { Player } from '@/lib/types';
 
 const BID_TIMER_MS = 30000; // base round timer (30s) and the hard cap after a bid
-const BID_EXTENSION_MS = 20000; // a bid adds 20s, but never beyond BID_TIMER_MS from now
+const BID_EXTENSION_MS = 15000; // a bid adds 15s, but never beyond BID_TIMER_MS from now
 
 function updateRoomStatus(room: ServerRoom): boolean {
   let changed = false;
@@ -116,7 +116,7 @@ function processBotBidding(room: ServerRoom): boolean {
   const seedMultiplier = 1.4 + ((botTeam.name.charCodeAt(0) + botTeam.name.charCodeAt(1)) % 10) * 0.15;
   const maxW = activePlayer.base * (seedMultiplier + Math.random() * 0.5);
 
-  const increment = [10, 25, 50][Math.floor(Math.random() * 3)];
+  const increment = [50, 100, 200][Math.floor(Math.random() * 3)];
   const nextBidAmount = room.currentBid + increment;
 
   if (nextBidAmount <= maxW && nextBidAmount <= (botTeam.budget - botTeam.spent)) {

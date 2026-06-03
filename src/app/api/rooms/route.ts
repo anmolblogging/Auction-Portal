@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-import { readDb, saveRoom, ServerRoom, getDeterministicUuid } from '@/lib/db';
+import { readDb, saveRoom, ServerRoom, getOrderedPlayerUuid } from '@/lib/db';
 
 export async function POST(req: Request) {
   try {
@@ -73,9 +73,11 @@ export async function POST(req: Request) {
     const isScheduled = scheduledAt && scheduledAt > Date.now();
     const scheduledDate = isScheduled ? new Date(scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : null;
 
+    // Index-ordered UUIDs so the players table reads back in auction order
+    // (Tier 1 -> Tier 5) rather than scrambled by a random hash.
     const mappedPlayers = players.map((p, idx) => ({
       ...p,
-      id: getDeterministicUuid(`${roomId}-player-${p.id || idx}`)
+      id: getOrderedPlayerUuid(roomId, idx)
     }));
 
     const newRoom: ServerRoom = {

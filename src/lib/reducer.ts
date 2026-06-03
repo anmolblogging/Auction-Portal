@@ -41,7 +41,7 @@ export function auctionReducer(state: AuctionState, action: AuctionAction): Auct
         ...state,
         currentBid: newBid,
         currentBidder: bidder,
-        timeLeft: Math.min((state.timeLeft || 0) + 20, 30),
+        timeLeft: Math.min((state.timeLeft || 0) + 15, 30),
         bidHistory: [newEntry, ...state.bidHistory.slice(0, 29)],
       };
     }
