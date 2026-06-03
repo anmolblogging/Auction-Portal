@@ -49,13 +49,33 @@ function clonePlayers(players: Player[]) {
   return players.map((player) => ({ ...player }));
 }
 
+// Keep the tier order (Tier 1 -> Tier 5, in first-seen order) but shuffle the
+// players within each tier, so every auction reveals tier-1 players in a random
+// order, then tier-2, and so on.
+function shuffleWithinTier(players: Player[]): Player[] {
+  const groups = new Map<string, Player[]>();
+  for (const p of players) {
+    if (!groups.has(p.tier)) groups.set(p.tier, []);
+    groups.get(p.tier)!.push(p);
+  }
+  const out: Player[] = [];
+  for (const group of groups.values()) {
+    for (let i = group.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [group[i], group[j]] = [group[j], group[i]];
+    }
+    out.push(...group);
+  }
+  return out;
+}
+
 export function getPlayersForSport(sport: string) {
   const normalized = sport.toLowerCase();
 
   if (normalized.includes('fifa') || normalized.includes('uefa') || normalized.includes('football')) {
-    // Full WC2026 squads (real ESPN rosters), already ordered Tier 1 -> Tier 5
-    // and GK -> DEF -> MID -> FWD within each tier.
-    return clonePlayers(WC2026_PLAYERS);
+    // Full WC2026 squads (real ESPN rosters). Tier 1 -> Tier 5 order, with
+    // players shuffled within each tier so the running order is randomised.
+    return shuffleWithinTier(clonePlayers(WC2026_PLAYERS));
   }
 
   if (normalized.includes('nba') || normalized.includes('basketball')) {

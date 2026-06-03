@@ -324,7 +324,7 @@ export default function Landing({
         </div>
       </nav>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'row', width: '100%', alignItems: 'stretch' }}>
+      <div className="landing-body" style={{ flex: 1, display: 'flex', flexDirection: 'row', width: '100%', alignItems: 'stretch' }}>
         {/* ROOM HISTORY SIDEBAR */}
         {userId && history.length > 0 && (
           <div style={{ width: 'clamp(260px, 25vw, 340px)', borderRight: '1px solid var(--bd)', padding: '24px 20px', overflowY: 'auto', background: 'rgba(0,0,0,0.15)' }}>

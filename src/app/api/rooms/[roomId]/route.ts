@@ -151,6 +151,7 @@ export async function GET(
     }
 
     let modified = false;
+    let playersChanged = false; // only re-upsert the (large) player set when needed
 
     // Heartbeat update for room activity: update updatedAt every 15s to keep it active
     if (!room.updatedAt || Date.now() - room.updatedAt > 15000) {
@@ -176,20 +177,22 @@ export async function GET(
       room.passedBy = [];
       room.endsAt = Date.now() + BID_TIMER_MS;
       modified = true;
+      playersChanged = true; // player[0] becomes the current player
     }
 
     // Check if we need to auto-advance timer or resolve player
     if (updateRoomStatus(room)) {
       modified = true;
+      playersChanged = true; // a sale/advance flips player statuses
     }
 
-    // Process bot bidding if enabled
+    // Process bot bidding if enabled (changes the bid, not any player status)
     if (processBotBidding(room)) {
       modified = true;
     }
 
     if (modified) {
-      await saveRoom(room);
+      await saveRoom(room, { skipPlayers: !playersChanged });
     }
 
     // Calculate time left to return to client
@@ -243,7 +246,7 @@ export async function POST(
       msg: `👤 ${userName || 'A user'} joined as "${team.name}"`,
     });
 
-    await saveRoom(room);
+    await saveRoom(room, { skipPlayers: true });
 
     return NextResponse.json({ room, teamId: team.id });
   } catch (error: any) {

@@ -134,11 +134,18 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     // Fetch once immediately
     fetchState();
 
+    // Poll every 3s as a baseline in ALL modes. In local-file mode there is no
+    // realtime channel, so without this the room never refreshes and the
+    // auction appears stuck (bots/timer transitions are processed server-side
+    // on each GET). In Supabase mode it's a safety net if the socket drops.
+    const pollInterval = setInterval(() => {
+      if (active) fetchState();
+    }, 3000);
+
     // Subscribe via WebSocket — triggers fetchState() when room row changes.
-    // This replaces the 1-second HTTP polling loop and eliminates the DB hammering.
     // Guard: supabase is null when NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are missing (local file fallback mode).
     if (!supabase) {
-      return () => { active = false; };
+      return () => { active = false; clearInterval(pollInterval); };
     }
 
     const channelName = `room-changes-${roomId}`;
@@ -168,15 +175,9 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       )
       .subscribe();
 
-    // Fallback polling every 3 seconds
-    // This guarantees the UI updates even if WebSockets disconnect or Supabase Replication isn't fully enabled
-    const fallbackInterval = setInterval(() => {
-      if (active) fetchState();
-    }, 3000);
-
     return () => {
       active = false;
-      clearInterval(fallbackInterval);
+      clearInterval(pollInterval);
       supabase!.removeChannel(channel);
     };
   }, [roomId]);
@@ -480,7 +481,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           <button className="btn bs bsm" onClick={onLeave}>Leave Room</button>
         </div>
 
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20, padding: 24, maxWidth: 1100, width: '100%', margin: '0 auto', overflow: 'hidden', minHeight: 0 }}>
+        <div className="lobby-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20, padding: 24, maxWidth: 1100, width: '100%', margin: '0 auto', overflow: 'hidden', minHeight: 0 }}>
           {/* Left Panel: Teams & Players */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflow: 'auto' }}>
             <div className="card" style={{ flex: 1, padding: 20 }}>
@@ -637,14 +638,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
+    <div className="auction-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
       {/* Top nav + tabs */}
       <div style={{ borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: 54, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--g)', letterSpacing: 2 }}>SAR</span>
           <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 6 }}>Code: {roomState.id}</span>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div className="auction-tabs" style={{ display: 'flex', gap: 4 }}>
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               style={{ padding: '6px 14px', border: 'none', background: tab === t.id ? 'var(--bg3)' : 'transparent', color: tab === t.id ? 'var(--t1)' : 'var(--t3)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: .5, cursor: 'pointer', borderRadius: 7, borderBottom: tab === t.id ? `2px solid var(--g)` : '2px solid transparent', transition: 'all .2s' }}>
@@ -745,7 +746,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                 )}
 
                 {/* Timer + Bid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div className={`card ${timeLeft <= 5 ? 'anim-urgent' : 'hover-lift'}`} style={{ textAlign: 'center', padding: 14 }}>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 1 }}>Time Left</div>
                     <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 62, color: tc, letterSpacing: 2, lineHeight: 1, transition: 'color .3s' }}>
@@ -967,7 +968,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       {/* ── MY TEAM TAB ── */}
       {tab === 'myteam' && me && (
         <div style={{ padding: 22, maxWidth: 900, margin: '0 auto', width: '100%' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
             {[
               { l: 'Budget Left', v: `₹${me.budget - me.spent}L`, c: 'var(--g)' },
               { l: 'Spent', v: `₹${me.spent}L`, c: 'var(--or)' },
@@ -1082,7 +1083,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               Download Results
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
+          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
             {[
               { l: 'Players Sold', v: roomState.soldLog.length, c: 'var(--g)' },
               { l: 'Unsold', v: roomState.unsoldLog.length, c: 'var(--re)' },
@@ -1147,7 +1148,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             );
           })()}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div className="two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div className="card" style={{ padding: 18 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Budget Spending</div>
               <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>

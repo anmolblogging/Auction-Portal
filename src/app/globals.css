@@ -82,4 +82,34 @@ select.inp option{background:var(--bg3)}
 
 /* Auction room layout */
 .auction-grid{display:grid;grid-template-columns:220px 1fr 240px;height:calc(100vh - 54px);overflow:hidden}
-@media(max-width:900px){.auction-grid{grid-template-columns:1fr}}
+
+/* Prevent sideways scrolling anywhere on small screens */
+html,body{max-width:100%;overflow-x:hidden}
+
+/* ── Mobile / responsive ── */
+@media(max-width:900px){
+  /* The auction page is a fixed-height, clipped flex column on desktop. On
+     mobile let the whole page grow and scroll vertically, and stack the three
+     auction panes. External !important overrides the inline styles. */
+  .auction-root{height:auto !important;min-height:100vh;overflow:visible !important}
+  .auction-grid{grid-template-columns:1fr;height:auto;overflow:visible}
+  .auction-grid>*{overflow:visible !important;border-right:none !important;max-height:none !important}
+  /* Tab strip scrolls sideways instead of overflowing the header */
+  .auction-tabs{overflow-x:auto;flex-wrap:nowrap;min-width:0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .auction-tabs::-webkit-scrollbar{height:0}
+}
+@media(max-width:700px){
+  .lobby-grid{grid-template-columns:1fr !important}
+  .two-col{grid-template-columns:1fr !important}
+  .stat-grid{grid-template-columns:repeat(2,1fr) !important}
+  /* Roomy desktop padding gets tight on phones */
+  .auction-grid>*{padding:12px !important}
+}
+/* Landing: stack the recent-rooms sidebar above the main content on mobile */
+@media(max-width:760px){
+  .landing-body{flex-direction:column !important}
+  .landing-body>*{width:100% !important;border-right:none !important}
+}
+@media(max-width:600px){
+  .three-col{grid-template-columns:1fr 1fr !important}
+}

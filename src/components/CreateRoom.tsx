@@ -343,7 +343,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                     </Field>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div className="three-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                     <Field label="Participants">
                       <input className="inp" type="number" min={2} max={12} value={cfg.participants} onChange={(e) => setCfg({ ...cfg, participants: parseInt(e.target.value, 10) || 2 })} />
                     </Field>

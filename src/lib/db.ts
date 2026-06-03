@@ -305,7 +305,10 @@ export async function getRoom(roomId: string): Promise<ServerRoom | null> {
 /**
  * Saves a ServerRoom object (Supabase with dynamic fallback to local file)
  */
-export async function saveRoom(room: ServerRoom): Promise<void> {
+export async function saveRoom(
+  room: ServerRoom,
+  opts: { skipPlayers?: boolean } = {}
+): Promise<void> {
   if (checkSupabase()) {
     try {
       // 1. Ensure host exists in users table
@@ -357,8 +360,11 @@ export async function saveRoom(room: ServerRoom): Promise<void> {
         if (teamsErr) throw teamsErr;
       }
 
-      // 4. Upsert players
-      if (room.players && room.players.length > 0) {
+      // 4. Upsert players — skipped for actions that don't change any player's
+      // status (bids, passes, chat, heartbeat). Player rows are large (a full
+      // WC squad set is ~1200 rows) so re-writing them on every action stalls
+      // the DB; we only write them on creation and on player transitions.
+      if (!opts.skipPlayers && room.players && room.players.length > 0) {
         const playersData = room.players.map(p => {
           const buyerTeam = room.participants.find(t => t.squad.some(s => s.id === p.id));
           const dbTeamId = buyerTeam ? getDeterministicUuid(`${room.id}-${buyerTeam.id}`) : null;

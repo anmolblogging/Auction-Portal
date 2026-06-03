@@ -97,8 +97,8 @@ export async function POST(
         room.bidHistory.unshift({ id: now, bidder, amount: nextBidVal });
         room.bidHistory = room.bidHistory.slice(0, 30);
 
-        // Save the entire room back to database
-        await saveRoom(room);
+        // A bid changes no player's status — skip the heavy player re-upsert.
+        await saveRoom(room, { skipPlayers: true });
 
         const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
         return NextResponse.json({ room: { ...room, timeLeft } });
@@ -132,7 +132,8 @@ export async function POST(
         });
         room.chat = room.chat.slice(-60);
 
-        await saveRoom(room);
+        // Resolution happens in the GET route (which re-upserts players there).
+        await saveRoom(room, { skipPlayers: true });
 
         const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 0;
         return NextResponse.json({ room: { ...room, timeLeft } });
@@ -169,8 +170,30 @@ export async function POST(
             user: 'System',
             msg: `🙅 ${team.name} passed on ${room.players[room.playerIdx]?.name ?? 'this player'}.`,
           });
+
+          // If there's a standing bid and everyone else has now passed, the
+          // player is auto-sold to the lone remaining bidder — no need to wait
+          // out the clock. The GET route finalises the sale + advances.
+          const passedBy = room.passedBy;
+          const others = room.participants.filter((p: any) => p.id !== room.currentBidder);
+          const allOthersPassed =
+            !!room.currentBidder && others.length > 0 && others.every((p: any) => passedBy.includes(p.id));
+
+          if (allOthersPassed) {
+            const winner = room.participants.find((p: any) => p.id === room.currentBidder);
+            room.phase = 'sold';
+            room.endsAt = now + 1500; // brief "SOLD" flash before the queue advances
+            room.chat.push({
+              id: now + 1,
+              user: 'System',
+              msg: `🔨 SOLD! ${room.players[room.playerIdx]?.name ?? 'Player'} to ${winner?.name ?? 'the bidder'} for ₹${room.currentBid}L — everyone else passed.`,
+            });
+          }
+
           room.chat = room.chat.slice(-60);
-          await saveRoom(room);
+          // Player status (current) is unchanged here; an auto-sell only flips
+          // the phase and is finalised by the GET route.
+          await saveRoom(room, { skipPlayers: true });
         }
 
         const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
@@ -189,7 +212,7 @@ export async function POST(
         // Use the saveRoom pattern for chat to ensure user mapping is handled correctly by db.ts
         room.chat.push({ id: now, user: user || 'Guest', msg: msg.trim() });
         room.chat = room.chat.slice(-60);
-        await saveRoom(room);
+        await saveRoom(room, { skipPlayers: true });
         
         const timeLeft = room.endsAt ? Math.max(0, Math.ceil((room.endsAt - Date.now()) / 1000)) : 30;
         return NextResponse.json({ room: { ...room, timeLeft } });
