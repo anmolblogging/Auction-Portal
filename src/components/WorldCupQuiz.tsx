@@ -14,6 +14,7 @@ interface Quiz {
   title: string;
   emoji: string;
   blurb: string;
+  group: string;
   questions: Question[];
 }
 
@@ -25,6 +26,7 @@ const QUIZZES: Quiz[] = [
     title: 'World Cup 2026 Basics',
     emoji: '🌎',
     blurb: 'Hosts, format and venues of the 2026 tournament.',
+    group: 'General',
     questions: [
       {
         q: 'Which three countries are co-hosting the 2026 World Cup?',
@@ -58,6 +60,7 @@ const QUIZZES: Quiz[] = [
     title: 'World Cup History',
     emoji: '📜',
     blurb: 'From 1930 to today — the tournament through the years.',
+    group: 'General',
     questions: [
       {
         q: 'Which country hosted and won the first World Cup in 1930?',
@@ -91,6 +94,7 @@ const QUIZZES: Quiz[] = [
     title: 'Legends & Records',
     emoji: '🏅',
     blurb: 'Iconic players and all-time records.',
+    group: 'General',
     questions: [
       {
         q: 'Who is the all-time top scorer in World Cup history?',
@@ -119,7 +123,108 @@ const QUIZZES: Quiz[] = [
       },
     ],
   },
+  {
+    id: 'hosts',
+    title: 'Hosts & Venues',
+    emoji: '🏟️',
+    blurb: 'Who hosted the World Cup, and where.',
+    group: 'General',
+    questions: [
+      { q: 'Which country hosted the 2014 World Cup?', options: ['Brazil', 'South Africa', 'Germany', 'Argentina'], answer: 0 },
+      { q: 'The 2010 World Cup was the first held on which continent?', options: ['Asia', 'Africa', 'South America', 'Oceania'], answer: 1 },
+      { q: 'Which two countries co-hosted the 2002 World Cup?', options: ['China & Japan', 'South Korea & Japan', 'Japan & Thailand', 'South Korea & China'], answer: 1 },
+      { q: 'Which country hosted the very first World Cup in 1930?', options: ['Brazil', 'Italy', 'Uruguay', 'France'], answer: 2 },
+      { q: 'Which Gulf nation hosted the 2022 World Cup?', options: ['UAE', 'Saudi Arabia', 'Qatar', 'Bahrain'], answer: 2 },
+    ],
+  },
+  {
+    id: 'goals',
+    title: 'Goals & Golden Boots',
+    emoji: '🥅',
+    blurb: 'Top scorers and goalscoring feats.',
+    group: 'General',
+    questions: [
+      { q: 'Who won the Golden Boot at the 2022 World Cup?', options: ['Lionel Messi', 'Kylian Mbappé', 'Julián Álvarez', 'Olivier Giroud'], answer: 1 },
+      { q: 'Which goalkeeper won the 2022 Golden Glove (best keeper)?', options: ['Hugo Lloris', 'Emiliano Martínez', 'Yassine Bounou', 'Dominik Livaković'], answer: 1 },
+      { q: 'Just Fontaine set the record for most goals in a single World Cup (13) in which year?', options: ['1954', '1958', '1962', '1966'], answer: 1 },
+      { q: 'Who scored the fastest goal in World Cup history (about 11 seconds)?', options: ['Hakan Şükür', 'Pelé', 'Gerd Müller', 'Ronaldo'], answer: 0 },
+      { q: 'How many goals did Miroslav Klose score across his World Cup career (a record)?', options: ['14', '15', '16', '18'], answer: 2 },
+    ],
+  },
+  {
+    id: 'argentina',
+    title: 'Argentina',
+    emoji: '🇦🇷',
+    blurb: 'La Albiceleste at the World Cup.',
+    group: 'Team Quizzes',
+    questions: [
+      { q: 'How many World Cups has Argentina won?', options: ['1', '2', '3', '4'], answer: 2 },
+      { q: 'Who captained Argentina to the 2022 title?', options: ['Ángel Di María', 'Lionel Messi', 'Sergio Agüero', 'Javier Mascherano'], answer: 1 },
+      { q: 'Argentina beat which team in the 2022 final?', options: ['Brazil', 'Croatia', 'France', 'Germany'], answer: 2 },
+      { q: 'Who scored the "Hand of God" goal for Argentina in 1986?', options: ['Diego Maradona', 'Mario Kempes', 'Gabriel Batistuta', 'Jorge Valdano'], answer: 0 },
+      { q: 'Who was Argentina’s goalkeeper and Golden Glove winner in 2022?', options: ['Sergio Romero', 'Franco Armani', 'Emiliano Martínez', 'Gerónimo Rulli'], answer: 2 },
+    ],
+  },
+  {
+    id: 'brazil',
+    title: 'Brazil',
+    emoji: '🇧🇷',
+    blurb: 'The Seleção — record five-time champions.',
+    group: 'Team Quizzes',
+    questions: [
+      { q: 'How many World Cups has Brazil won (a record)?', options: ['3', '4', '5', '6'], answer: 2 },
+      { q: 'In which year did Brazil last win the World Cup?', options: ['1994', '1998', '2002', '2006'], answer: 2 },
+      { q: 'Which Brazilian won three World Cups (1958, 1962, 1970)?', options: ['Garrincha', 'Pelé', 'Zico', 'Romário'], answer: 1 },
+      { q: 'Who was Brazil’s top scorer at the 2002 World Cup?', options: ['Rivaldo', 'Ronaldinho', 'Ronaldo', 'Kaká'], answer: 2 },
+      { q: 'Brazil suffered a famous 7-1 semi-final loss in 2014 to which team?', options: ['Netherlands', 'Germany', 'Argentina', 'France'], answer: 1 },
+    ],
+  },
+  {
+    id: 'france',
+    title: 'France',
+    emoji: '🇫🇷',
+    blurb: 'Les Bleus on the world stage.',
+    group: 'Team Quizzes',
+    questions: [
+      { q: 'How many World Cups has France won?', options: ['1', '2', '3', '4'], answer: 1 },
+      { q: 'Who scored twice in the 1998 final as France beat Brazil?', options: ['Thierry Henry', 'Zinedine Zidane', 'Didier Deschamps', 'David Trezeguet'], answer: 1 },
+      { q: 'Which young France striker starred at the 2018 World Cup?', options: ['Antoine Griezmann', 'Kylian Mbappé', 'Olivier Giroud', 'Ousmane Dembélé'], answer: 1 },
+      { q: 'France lost the 2022 final to which team?', options: ['Argentina', 'Croatia', 'Morocco', 'Brazil'], answer: 0 },
+      { q: 'Who has managed France to a World Cup title as head coach?', options: ['Raymond Domenech', 'Didier Deschamps', 'Laurent Blanc', 'Aimé Jacquet'], answer: 1 },
+    ],
+  },
+  {
+    id: 'england',
+    title: 'England',
+    emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+    blurb: 'The Three Lions at the World Cup.',
+    group: 'Team Quizzes',
+    questions: [
+      { q: 'In which year did England win their only World Cup?', options: ['1962', '1966', '1970', '1974'], answer: 1 },
+      { q: 'Who scored a hat-trick in the 1966 World Cup final?', options: ['Bobby Charlton', 'Geoff Hurst', 'Martin Peters', 'Roger Hunt'], answer: 1 },
+      { q: 'England won the 1966 World Cup as which of these?', options: ['Away to Brazil', 'The host nation', 'In Germany', 'In Mexico'], answer: 1 },
+      { q: 'Who won the Golden Boot at the 2018 World Cup for England?', options: ['Raheem Sterling', 'Harry Kane', 'Dele Alli', 'Jesse Lingard'], answer: 1 },
+      { q: 'England reached the semi-finals at which recent World Cup?', options: ['2014', '2018', '2022', 'Both 2018 and 2022'], answer: 1 },
+    ],
+  },
+  {
+    id: 'spain',
+    title: 'Spain',
+    emoji: '🇪🇸',
+    blurb: 'La Roja and the tiki-taka era.',
+    group: 'Team Quizzes',
+    questions: [
+      { q: 'In which year did Spain win the World Cup?', options: ['2006', '2008', '2010', '2014'], answer: 2 },
+      { q: 'Who scored the winning goal in the 2010 World Cup final?', options: ['David Villa', 'Andrés Iniesta', 'Xavi', 'Fernando Torres'], answer: 1 },
+      { q: 'Spain beat which team in the 2010 final?', options: ['Germany', 'Netherlands', 'Uruguay', 'Italy'], answer: 1 },
+      { q: 'The 2010 World Cup was hosted in which country?', options: ['Brazil', 'Germany', 'South Africa', 'France'], answer: 2 },
+      { q: 'How many World Cup titles has Spain won?', options: ['0', '1', '2', '3'], answer: 1 },
+    ],
+  },
 ];
+
+// Distinct quiz groups, in first-seen order, for the menu sections.
+const GROUPS = Array.from(new Set(QUIZZES.map((q) => q.group)));
 
 const overlay: CSSProperties = {
   position: 'fixed',
@@ -196,23 +301,26 @@ export default function WorldCupQuiz({ onClose }: { onClose: () => void }) {
         <div className="card" style={modal} onClick={(e) => e.stopPropagation()}>
           {header('WORLD CUP 2026 QUIZ')}
           <p style={{ fontSize: 13, color: 'var(--t3)', marginTop: -8 }}>Pick a quiz and test your World Cup knowledge.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {QUIZZES.map((q) => (
-              <button
-                key={q.id}
-                className="card hover-lift"
-                onClick={() => startQuiz(q)}
-                style={{ textAlign: 'left', padding: 16, border: '1px solid var(--bd2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg2)' }}
-              >
-                <span style={{ fontSize: 28 }}>{q.emoji}</span>
-                <span style={{ flex: 1 }}>
-                  <span style={{ display: 'block', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 16, color: 'var(--t1)' }}>{q.title}</span>
-                  <span style={{ display: 'block', fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>{q.blurb}</span>
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--g)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>{q.questions.length} Qs →</span>
-              </button>
-            ))}
-          </div>
+          {GROUPS.map((group) => (
+            <div key={group} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--g)' }}>{group}</div>
+              {QUIZZES.filter((q) => q.group === group).map((q) => (
+                <button
+                  key={q.id}
+                  className="card hover-lift"
+                  onClick={() => startQuiz(q)}
+                  style={{ textAlign: 'left', padding: 14, border: '1px solid var(--bd2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg2)' }}
+                >
+                  <span style={{ fontSize: 26 }}>{q.emoji}</span>
+                  <span style={{ flex: 1 }}>
+                    <span style={{ display: 'block', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)' }}>{q.title}</span>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>{q.blurb}</span>
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--g)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, whiteSpace: 'nowrap' }}>{q.questions.length} Qs →</span>
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     );

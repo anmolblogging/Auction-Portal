@@ -23,12 +23,13 @@ interface AuctionRoomProps {
   onLeave: () => void;
 }
 
-type Tab = 'live' | 'myteam' | 'allteams' | 'analytics';
+type Tab = 'live' | 'myteam' | 'allteams' | 'unsold' | 'analytics';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'live', label: '🔴 Live Auction' },
   { id: 'myteam', label: '👤 My Team' },
   { id: 'allteams', label: '🏆 All Teams' },
+  { id: 'unsold', label: '🚫 Unsold' },
   { id: 'analytics', label: '📊 Analytics' },
 ];
 
@@ -1033,6 +1034,39 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── UNSOLD TAB ── */}
+      {tab === 'unsold' && (
+        <div style={{ padding: 22, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, letterSpacing: 2 }}>UNSOLD PLAYERS</div>
+            <div style={{ color: 'var(--t3)', fontSize: 12 }}>
+              {roomState.unsoldLog.length} player{roomState.unsoldLog.length === 1 ? '' : 's'} went unsold — no team placed a bid.
+            </div>
+          </div>
+          {roomState.unsoldLog.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--t3)', padding: 70, fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
+              No unsold players yet.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 12 }}>
+              {roomState.unsoldLog.map((p) => (
+                <div key={String(p.id)} className="card" style={{ padding: 14, border: `1px solid ${(ROLE_COLORS[p.role] || '#888')}33`, opacity: 0.92 }}>
+                  <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
+                    <RBadge role={p.role} />
+                    <TBadge tier={p.tier} />
+                  </div>
+                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)', marginBottom: 3 }}>{p.name}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{playerFlag(p)}{p.country ? ` ${p.country}` : ''}</span>
+                    <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: 'var(--t3)', letterSpacing: 1 }}>Base ₹{p.base}L</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

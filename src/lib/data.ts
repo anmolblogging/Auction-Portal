@@ -1,4 +1,5 @@
 import { Player, Team } from './types';
+import { WC2026_PLAYERS } from './wcSquads';
 
 export const TEAM_COLOR_PALETTE = [
   '#00DC72',
@@ -24,21 +25,6 @@ const IPL_PLAYERS: Player[] = [
   { id: 10, name: 'Jos Buttler', country: 'England', role: 'WK-Batter', tier: 'Platinum', base: 120, img: 'JBu', nat: '🇬🇧' },
   { id: 11, name: 'Hardik Pandya', country: 'India', role: 'All-rounder', tier: 'Gold', base: 90, img: 'HP', nat: '🇮🇳' },
   { id: 12, name: 'Sunil Narine', country: 'West Indies', role: 'All-rounder', tier: 'Gold', base: 80, img: 'SN', nat: '🇼🇮' },
-];
-
-const FOOTBALL_PLAYERS: Player[] = [
-  { id: 101, name: 'Lionel Messi', country: 'Argentina', role: 'Forward', tier: 'Elite', base: 220, img: 'LM', nat: '🇦🇷' },
-  { id: 102, name: 'Kylian Mbappe', country: 'France', role: 'Forward', tier: 'Elite', base: 210, img: 'KM', nat: '🇫🇷' },
-  { id: 103, name: 'Kevin De Bruyne', country: 'Belgium', role: 'Midfielder', tier: 'Elite', base: 185, img: 'KDB', nat: '🇧🇪' },
-  { id: 104, name: 'Jude Bellingham', country: 'England', role: 'Midfielder', tier: 'Platinum', base: 175, img: 'JB', nat: '🇬🇧' },
-  { id: 105, name: 'Erling Haaland', country: 'Norway', role: 'Forward', tier: 'Elite', base: 215, img: 'EH', nat: '🇳🇴' },
-  { id: 106, name: 'Virgil van Dijk', country: 'Netherlands', role: 'Defender', tier: 'Platinum', base: 150, img: 'VVD', nat: '🇳🇱' },
-  { id: 107, name: 'Rodri', country: 'Spain', role: 'Midfielder', tier: 'Platinum', base: 160, img: 'ROD', nat: '🇪🇸' },
-  { id: 108, name: 'Alisson Becker', country: 'Brazil', role: 'Goalkeeper', tier: 'Gold', base: 135, img: 'AB', nat: '🇧🇷' },
-  { id: 109, name: 'Bukayo Saka', country: 'England', role: 'Forward', tier: 'Gold', base: 140, img: 'BS', nat: '🇬🇧' },
-  { id: 110, name: 'Luka Modric', country: 'Croatia', role: 'Midfielder', tier: 'Gold', base: 115, img: 'LMO', nat: '🇭🇷' },
-  { id: 111, name: 'Achraf Hakimi', country: 'Morocco', role: 'Defender', tier: 'Gold', base: 120, img: 'AH', nat: '🇲🇦' },
-  { id: 112, name: 'Mike Maignan', country: 'France', role: 'Goalkeeper', tier: 'Silver', base: 95, img: 'MM', nat: '🇫🇷' },
 ];
 
 const BASKETBALL_PLAYERS: Player[] = [
@@ -67,7 +53,9 @@ export function getPlayersForSport(sport: string) {
   const normalized = sport.toLowerCase();
 
   if (normalized.includes('fifa') || normalized.includes('uefa') || normalized.includes('football')) {
-    return clonePlayers(FOOTBALL_PLAYERS);
+    // Full WC2026 squads (real ESPN rosters), already ordered Tier 1 -> Tier 5
+    // and GK -> DEF -> MID -> FWD within each tier.
+    return clonePlayers(WC2026_PLAYERS);
   }
 
   if (normalized.includes('nba') || normalized.includes('basketball')) {
@@ -108,4 +96,9 @@ export const TIER_COLORS: Record<string, string> = {
   Platinum: '#8B8FA8',
   Gold: '#EAB308',
   Silver: '#6B7280',
+  'Tier 1': '#F59E0B',
+  'Tier 2': '#4F8EF7',
+  'Tier 3': '#00DC72',
+  'Tier 4': '#8B8FA8',
+  'Tier 5': '#6B7280',
 };

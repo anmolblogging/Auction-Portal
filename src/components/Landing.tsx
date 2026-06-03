@@ -4,7 +4,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { AuthSession, ManagedUser } from '@/lib/auth';
 import type { AuctionPhase } from '@/lib/types';
 import Avatar from '@/components/ui/Avatar';
-import FixturesBar from '@/components/FixturesBar';
 import WorldCupQuiz from '@/components/WorldCupQuiz';
 
 interface RoomHistoryEntry {
@@ -282,8 +281,6 @@ export default function Landing({
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <FixturesBar />
-
       <nav
         style={{
           display: 'flex',

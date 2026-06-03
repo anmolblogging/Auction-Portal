@@ -16,7 +16,8 @@ const SPECIAL: Record<string, string> = {
 const NAME_TO_ISO: Record<string, string> = {
   // WC2026 squad upload nations
   algeria: 'DZ', argentina: 'AR', austria: 'AT', belgium: 'BE',
-  'bosnia and herzegovina': 'BA', brazil: 'BR', canada: 'CA', colombia: 'CO',
+  'bosnia and herzegovina': 'BA', 'bosnia-herzegovina': 'BA', brazil: 'BR',
+  canada: 'CA', colombia: 'CO',
   croatia: 'HR', czechia: 'CZ', 'czech republic': 'CZ', 'dr congo': 'CD',
   'democratic republic of congo': 'CD', 'congo dr': 'CD', ecuador: 'EC',
   egypt: 'EG', france: 'FR', germany: 'DE', ghana: 'GH', greece: 'GR',
