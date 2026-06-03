@@ -4,8 +4,6 @@ import { getRoom, saveRoom } from '@/lib/db';
 
 const BID_TIMER_MS = 30000; 
 const BID_EXTENSION_MS = 15000; 
-
-// 🚀 FIREBASE FIX: The Array Sanitizer
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
 
 export async function POST(
@@ -23,8 +21,14 @@ export async function POST(
     const room = await getRoom(roomId);
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
-    // Sanitize arrays before doing ANY actions
-    room.participants = toArr(room.participants);
+    // 🚀 THE BANKER FIX: Auto-patch broken rooms before trying to bid
+    room.participants = toArr(room.participants).map((p: any) => ({
+      ...p,
+      budget: p.budget || room.budget || 10000,
+      spent: p.spent || 0,
+      squad: p.squad || []
+    }));
+    
     room.players = toArr(room.players);
     room.chat = toArr(room.chat);
     room.bidHistory = toArr(room.bidHistory);
@@ -39,7 +43,7 @@ export async function POST(
 
         room.phase = 'bidding';
         room.playerIdx = 0;
-        room.currentBid = room.players[0].base;
+        room.currentBid = room.players[0]?.base || 50;
         room.currentBidder = null;
         room.passedBy = [];
         room.endsAt = now + BID_TIMER_MS;
@@ -54,11 +58,14 @@ export async function POST(
 
         const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-        if (team.ownerId !== userId && !room.enableBots) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
+        
+        if (team.ownerId !== null && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: 'You are already the highest bidder' }, { status: 400 });
         if (room.passedBy.includes(bidder)) return NextResponse.json({ error: 'You passed on this player and can no longer bid' }, { status: 400 });
 
-        const nextBidVal = room.currentBid + amount;
+        const nextBidVal = (room.currentBid || 0) + amount;
+        
+        // This is what was silently crashing! Now it is completely safe.
         if (team.spent + nextBidVal > team.budget) return NextResponse.json({ error: 'Insufficient budget' }, { status: 400 });
 
         room.currentBid = nextBidVal;
@@ -98,7 +105,7 @@ export async function POST(
 
         const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-        if (team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
+        if (team.ownerId !== null && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: "You're the highest bidder — you can't pass" }, { status: 400 });
 
         if (!room.passedBy.includes(bidder)) {

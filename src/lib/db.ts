@@ -16,7 +16,9 @@ export async function getRoom(roomId: string): Promise<ServerRoom | null> {
 
 export async function saveRoom(room: ServerRoom, opts: any = {}): Promise<void> {
   room.updatedAt = Date.now();
-  await set(ref(database, `rooms/${room.id.toUpperCase()}`), room);
+  // 🚀 FIREBASE CRASH FIX: Deep clean any stray 'undefined' or 'NaN' values before saving
+  const cleanRoom = JSON.parse(JSON.stringify(room));
+  await set(ref(database, `rooms/${room.id.toUpperCase()}`), cleanRoom);
 }
 
 export async function readDb(): Promise<Record<string, ServerRoom>> {

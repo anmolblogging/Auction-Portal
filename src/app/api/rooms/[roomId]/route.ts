@@ -4,8 +4,6 @@ import { getRoom, saveRoom } from '@/lib/db';
 
 const BID_TIMER_MS = 30000;
 const TRANSITION_DELAY_MS = 1500;
-
-// 🚀 FIREBASE FIX: The Array Sanitizer for the Backend
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
 
 export async function GET(
@@ -18,8 +16,14 @@ export async function GET(
     
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
-    // 🚀 Force all arrays to be real arrays so the backend doesn't crash on .length or .find()
-    room.participants = toArr(room.participants);
+    // 🚀 THE BANKER FIX: Auto-patch current broken rooms
+    room.participants = toArr(room.participants).map((p: any) => ({
+      ...p,
+      budget: p.budget || room.budget || 10000,
+      spent: p.spent || 0,
+      squad: p.squad || []
+    }));
+
     room.players = toArr(room.players);
     room.chat = toArr(room.chat);
     room.bidHistory = toArr(room.bidHistory);
@@ -30,7 +34,6 @@ export async function GET(
     const now = Date.now();
     let updated = false;
 
-    // Added a 2500ms buffer to forgive server/client clock delays
     if (room.endsAt && (now + 2500) >= room.endsAt) {
       if (room.phase === 'bidding') {
         const pl = room.players[room.playerIdx];
@@ -42,19 +45,19 @@ export async function GET(
           const win = room.participants.find((p: any) => p.id === room.currentBidder);
           if (win) {
             win.squad = toArr(win.squad);
-            win.squad.push({ ...pl, soldPrice: room.currentBid });
-            win.spent += room.currentBid;
+            win.squad.push({ ...pl, soldPrice: room.currentBid || 0 });
+            win.spent = (win.spent || 0) + (room.currentBid || 0); 
           }
           
-          room.soldLog.push({ player: pl, price: room.currentBid, buyer: room.currentBidder });
-          room.chat.push({ id: now, user: 'System', msg: `🔨 SOLD! ${pl.name} for ₹${room.currentBid}L.` });
+          room.soldLog.push({ player: pl, price: room.currentBid || 0, buyer: room.currentBidder });
+          room.chat.push({ id: now, user: 'System', msg: `🔨 SOLD! ${pl?.name || 'Player'} for ₹${room.currentBid}L.` });
           updated = true;
         } else {
           room.phase = 'unsold';
           room.endsAt = now + TRANSITION_DELAY_MS;
           
           room.unsoldLog.push(pl);
-          room.chat.push({ id: now, user: 'System', msg: `❌ UNSOLD: ${pl.name}. No bids.` });
+          room.chat.push({ id: now, user: 'System', msg: `❌ UNSOLD: ${pl?.name || 'Player'}. No bids.` });
           updated = true;
         }
         
@@ -66,12 +69,11 @@ export async function GET(
         if (room.playerIdx >= room.players.length) {
           room.phase = 'done';
           room.endsAt = null;
-          
           room.chat.push({ id: now, user: 'System', msg: `🏆 Auction has concluded!` });
           room.chat = room.chat.slice(-60);
         } else {
           room.phase = 'bidding';
-          room.currentBid = room.players[room.playerIdx].base;
+          room.currentBid = room.players[room.playerIdx]?.base || 50; 
           room.currentBidder = null;
           room.passedBy = [];
           room.endsAt = now + BID_TIMER_MS;
@@ -82,7 +84,7 @@ export async function GET(
         if (now >= room.scheduledAt) {
           room.phase = 'bidding';
           room.playerIdx = 0;
-          room.currentBid = room.players[0]?.base || 10;
+          room.currentBid = room.players[0]?.base || 50;
           room.currentBidder = null;
           room.passedBy = [];
           room.endsAt = now + BID_TIMER_MS;
@@ -114,11 +116,9 @@ export async function POST(
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     
     room.participants = toArr(room.participants);
-
     const openSlot = room.participants.find((p: any) => p.ownerId === null);
-    if (!openSlot) {
-      return NextResponse.json({ error: 'Room is full! No open slots left.' }, { status: 400 });
-    }
+    
+    if (!openSlot) return NextResponse.json({ error: 'Room is full! No open slots left.' }, { status: 400 });
 
     openSlot.ownerId = userId;
     openSlot.name = teamName || 'Guest Team';

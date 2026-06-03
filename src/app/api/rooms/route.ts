@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { readDb, saveRoom } from '@/lib/db';
 import { ServerRoom } from '@/lib/types';
 
+const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -9,12 +11,12 @@ export async function GET(req: Request) {
     const db = await readDb();
     
     const rooms = Object.values(db).map((room: ServerRoom) => {
-      if (!room.participants || typeof room.participants === 'number') room.participants = [];
-      if (!room.players) room.players = [];
-      if (!room.chat) room.chat = [];
-      if (!room.bidHistory) room.bidHistory = [];
-      if (!room.soldLog) room.soldLog = [];
-      if (!room.unsoldLog) room.unsoldLog = [];
+      room.participants = toArr(room.participants);
+      room.players = toArr(room.players);
+      room.chat = toArr(room.chat);
+      room.bidHistory = toArr(room.bidHistory);
+      room.soldLog = toArr(room.soldLog);
+      room.unsoldLog = toArr(room.unsoldLog);
       if (!room.phase) room.phase = room.scheduledAt ? 'scheduled' : 'lobby';
       return room;
     });
@@ -32,7 +34,6 @@ export async function GET(req: Request) {
     
     return NextResponse.json({ rooms, history });
   } catch (error: any) {
-    console.error('Error fetching rooms:', error);
     return NextResponse.json({ error: 'Failed to fetch rooms' }, { status: 500 });
   }
 }
@@ -43,8 +44,7 @@ export async function POST(req: Request) {
     let room = body.room || body.roomData || body.data || body;
     if (Array.isArray(room)) room = room[0];
 
-    if (!room.id) room.id = room.roomId || room.roomCode || body.roomId || body.id;
-    if (!room.id) room.id = `AUC-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!room.id) room.id = room.roomId || room.roomCode || body.roomId || body.id || `AUC-${Math.floor(1000 + Math.random() * 9000)}`;
     if (!room.phase) room.phase = room.scheduledAt ? 'scheduled' : 'lobby';
 
     if (room.teams && Array.isArray(room.teams)) {
@@ -52,28 +52,33 @@ export async function POST(req: Request) {
       delete room.teams;
     }
 
-    if (!room.participants || typeof room.participants === 'number') room.participants = [];
-    
-    // 🚀 THE FIX: Explicitly grant the host ownership of their team!
+    // 🚀 THE BANKER FIX: Ensure every team has a budget, spent tracker, and squad array!
+    room.participants = toArr(room.participants).map((p: any) => ({
+      ...p,
+      budget: p.budget || room.budget || 10000,
+      spent: p.spent || 0,
+      squad: p.squad || []
+    }));
+
     if (room.participants.length > 0 && room.hostId) {
-      // Find the host's team (usually ID 'you') and stamp it with their userId
-      const hostTeam = room.participants.find((p: any) => p.id === 'you') || room.participants[0];
-      if (hostTeam) {
-        hostTeam.ownerId = room.hostId;
+      let hostTeam = room.participants.find((p: any) => p.id === 'you');
+      if (!hostTeam) {
+        hostTeam = room.participants[0];
+        hostTeam.id = 'you'; 
       }
+      hostTeam.ownerId = room.hostId;
     }
 
-    if (!room.players) room.players = [];
-    if (!room.chat) room.chat = [];
-    if (!room.bidHistory) room.bidHistory = [];
-    if (!room.soldLog) room.soldLog = [];
-    if (!room.unsoldLog) room.unsoldLog = [];
-    if (!room.passedBy) room.passedBy = [];
+    room.players = toArr(room.players);
+    room.chat = toArr(room.chat);
+    room.bidHistory = toArr(room.bidHistory);
+    room.soldLog = toArr(room.soldLog);
+    room.unsoldLog = toArr(room.unsoldLog);
+    room.passedBy = toArr(room.passedBy);
     
     await saveRoom(room);
     return NextResponse.json({ room });
   } catch (error: any) {
-    console.error('Error creating room:', error);
     return NextResponse.json({ error: 'Failed to create room' }, { status: 500 });
   }
 }

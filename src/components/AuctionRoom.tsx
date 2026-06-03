@@ -32,6 +32,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'analytics', label: '📊 Analytics' },
 ];
 
+// 🚀 BULLETPROOF ARRAY FIX
+const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
+
 export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave }: AuctionRoomProps) {
   const [roomState, setRoomState] = useState<ServerRoom | null>(null);
   const [tab, setTab] = useState<Tab>('live');
@@ -54,7 +57,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     const secs = totalSecs % 60;
     const mins = Math.floor(totalSecs / 60) % 60;
     const hours = Math.floor(totalSecs / 3600);
-
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
   };
@@ -70,34 +72,17 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   const handleDownloadResults = () => {
     if (!roomState) return;
-
-    const rows = [
-      ['Team Name', 'Player Name', 'Role', 'Country', 'Sold Price (₹L)'],
-    ];
-
-    (roomState.participants || []).forEach((team: any) => {
+    const rows = [['Team Name', 'Player Name', 'Role', 'Country', 'Sold Price (₹L)']];
+    toArr(roomState.participants).forEach((team: any) => {
       if (!team.squad || team.squad.length === 0) {
         rows.push([team.name, 'No players', '', '', '']);
         return;
       }
-
       team.squad.forEach((player: any) => {
-        rows.push([
-          team.name,
-          player.name,
-          player.role,
-          player.country,
-          String(player.soldPrice ?? ''),
-        ]);
+        rows.push([team.name, player.name, player.role, player.country, String(player.soldPrice ?? '')]);
       });
     });
-
-    const csv = rows
-      .map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')
-      )
-      .join('\n');
-
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -107,11 +92,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     URL.revokeObjectURL(url);
   };
 
-// Firebase Realtime Listener (0ms delay)
+  // Firebase Realtime Listener
   useEffect(() => {
     let active = true;
     const roomRef = ref(database, `rooms/${roomId.toUpperCase()}`);
-
     const unsubscribe = onValue(roomRef, (snapshot) => {
       if (!active) return;
       if (snapshot.exists()) {
@@ -121,7 +105,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         setNotFound(true);
       }
     });
-
     return () => {
       active = false;
       off(roomRef, 'value', unsubscribe);
@@ -132,20 +115,15 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   useEffect(() => {
     let mounted = true;
-
     const timer = setInterval(() => {
       if (roomState && roomState.endsAt) {
-        // BUGFIX: Convert endsAt to a strict number to prevent NaN crashes
         const endsAtMs = new Date(roomState.endsAt).getTime();
         const left = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000));
         
-        if (roomState.phase === 'bidding') {
-          setTimeLeft(left);
-        }
+        if (roomState.phase === 'bidding') setTimeLeft(left);
 
         if (left === 0 && !transitionRef.current && (roomState.phase === 'bidding' || roomState.phase === 'sold' || roomState.phase === 'unsold')) {
           transitionRef.current = true;
-          
           fetch(`/api/rooms/${roomState.id}?t=${Date.now()}`, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
@@ -164,7 +142,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         }
       }
     }, 100);
-
     return () => {
       mounted = false;
       clearInterval(timer);
@@ -173,11 +150,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   useEffect(() => {
     if (roomState && roomState.phase === 'scheduled' && roomState.scheduledAt) {
-      // BUGFIX: Date conversion
       const scheduledAtMs = new Date(roomState.scheduledAt).getTime();
-      const update = () => {
-        setTimeToStart(Math.max(0, scheduledAtMs - Date.now()));
-      };
+      const update = () => setTimeToStart(Math.max(0, scheduledAtMs - Date.now()));
       update();
       const timer = setInterval(update, 250);
       return () => clearInterval(timer);
@@ -186,14 +160,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   useEffect(() => {
     if (!roomState) return;
-
-    if (roomState.phase === 'bidding' &&
-        (lastPhaseRef.current === 'lobby' || lastPhaseRef.current === 'scheduled')) {
-      
+    if (roomState.phase === 'bidding' && (lastPhaseRef.current === 'lobby' || lastPhaseRef.current === 'scheduled')) {
       let val = 3;
       setLaunchOverlay(3);
       playCountdownSound();
-
       const timer = setInterval(() => {
         val -= 1;
         if (val > 0) {
@@ -208,14 +178,38 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         }
       }, 900);
     }
-
     lastPhaseRef.current = roomState.phase;
   }, [roomState?.phase]);
 
+  // 🤖 THE CPU BOT BRAIN (THIS WAS MISSING!)
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
+    if (!roomState || !roomState.enableBots || roomState.phase !== 'bidding') return;
+    if (roomState.hostId !== userId) return; // Only host device runs bot logic
+
+    const bots = toArr(roomState.participants).filter((p: any) => p.ownerId === null);
+    if (bots.length === 0) return;
+
+    const botTimer = setTimeout(() => {
+      const bot = bots[Math.floor(Math.random() * bots.length)];
+      
+      if (roomState.currentBidder === bot.id) return;
+      if (roomState.currentBid >= 150) return; // Prevent bots from overbidding
+      
+      const nextBid = roomState.currentBid + 10;
+      if ((bot.spent || 0) + nextBid <= (bot.budget || 0)) {
+        fetch(`/api/rooms/${roomId}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: { type: 'BID', bidder: bot.id, amount: 10 }, userId }),
+        }).catch(() => {});
+      }
+    }, Math.floor(Math.random() * 3000) + 2000); // Bots wait 2-5 seconds
+
+    return () => clearTimeout(botTimer);
+  }, [roomState?.currentBid, roomState?.phase]);
+
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [roomState?.chat]);
 
   useEffect(() => {
@@ -227,9 +221,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   const lastBidRef = useRef(roomState?.currentBid);
   useEffect(() => {
-    if (roomState?.phase === 'bidding' && roomState.currentBid > (lastBidRef.current || 0)) {
-      playBidSound();
-    }
+    if (roomState?.phase === 'bidding' && roomState.currentBid > (lastBidRef.current || 0)) playBidSound();
     lastBidRef.current = roomState?.currentBid;
   }, [roomState?.currentBid, roomState?.phase]);
 
@@ -242,9 +234,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   }, [timeLeft, roomState?.phase]);
 
   useEffect(() => {
-    if (roomState?.phase === 'sold') {
-      playSoldSound();
-    }
+    if (roomState?.phase === 'sold') playSoldSound();
   }, [roomState?.phase]);
 
   async function handleStartAuction() {
@@ -258,9 +248,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       });
       const data = await res.json();
       if (data.error) alert(data.error);
-      else setRoomState(data.room);
     } catch (err) {
-      console.error('Failed to start auction:', err);
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -277,9 +266,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       });
       const data = await res.json();
       if (data.error) alert(data.error);
-      else setRoomState(data.room);
     } catch (err) {
-      console.error('Failed to place bid:', err);
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -300,9 +288,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       });
       const data = await res.json();
       if (data.error) alert(data.error);
-      else setRoomState(data.room);
     } catch (err) {
-      console.error('Failed to skip player:', err);
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -320,9 +307,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       });
       const data = await res.json();
       if (data.error) alert(data.error);
-      else setRoomState(data.room);
     } catch (err) {
-      console.error('Failed to pass:', err);
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
@@ -333,16 +319,13 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     const msgToSend = chatMsg.trim();
     setChatMsg(''); 
     try {
-      const res = await fetch(`/api/rooms/${roomId}/action`, {
+      await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: { type: 'CHAT', msg: msgToSend, user: userName || 'Guest' }, userId }),
       });
-      const data = await res.json();
-      if (data.error) console.error(data.error);
-      else setRoomState(data.room);
     } catch (err) {
-      console.error('Failed to send chat message:', err);
+      console.error(err);
     }
   }
 
@@ -367,9 +350,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     );
   }
 
-// 🚀 BULLETPROOF ARRAY FIX
-  const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
-  
   const safeParticipants = toArr(roomState.participants);
   const safePlayers = toArr(roomState.players);
   const safeChat = toArr(roomState.chat);
@@ -531,7 +511,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     const pending = (roomState.currentBidder === p.id && (roomState.phase === 'bidding' || roomState.phase === 'sold'))
       ? roomState.currentBid
       : 0;
-    return p.budget - p.spent - pending;
+    return (p.budget || 0) - (p.spent || 0) - pending;
   };
 
   return (
@@ -588,7 +568,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     </span>
                   </div>
                   <div style={{ marginTop: 5, height: 3, background: 'var(--bd2)', borderRadius: 2 }}>
-                    <div style={{ height: '100%', width: `${((p.budget - availLeft(p)) / p.budget) * 100}%`, background: p.color, borderRadius: 2, transition: 'width .4s' }} />
+                    <div style={{ height: '100%', width: `${(((p.budget || 0) - availLeft(p)) / (p.budget || 1)) * 100}%`, background: p.color, borderRadius: 2, transition: 'width .4s' }} />
                   </div>
                 </div>
               );
@@ -668,7 +648,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     {[10, 20].map((inc) => (
                       <button key={inc} className="btn bp"
                         onClick={() => handleBid(inc)}
-                        disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || hasPassed || submitting || (me && me.spent + roomState.currentBid + inc > me.budget)}
+                        disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || hasPassed || submitting || (me && (me.spent || 0) + roomState.currentBid + inc > (me.budget || 0))}
                         style={{
                           flex: 1,
                           padding: '18px 6px',
@@ -853,10 +833,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         <div style={{ padding: 22, maxWidth: 900, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
             {[
-              { l: 'Budget Left', v: `₹${me.budget - me.spent}L`, c: 'var(--g)' },
-              { l: 'Spent', v: `₹${me.spent}L`, c: 'var(--or)' },
+              { l: 'Budget Left', v: `₹${(me.budget || 0) - (me.spent || 0)}L`, c: 'var(--g)' },
+              { l: 'Spent', v: `₹${me.spent || 0}L`, c: 'var(--or)' },
               { l: 'Players', v: `${(me.squad || []).length}/${roomState.squadSize}`, c: 'var(--bl)' },
-              { l: 'Avg Price', v: (me.squad || []).length ? `₹${Math.round(me.spent / (me.squad || []).length)}L` : '—', c: 'var(--pu)' },
+              { l: 'Avg Price', v: (me.squad || []).length ? `₹${Math.round((me.spent || 0) / (me.squad || []).length)}L` : '—', c: 'var(--pu)' },
             ].map((s) => (
               <div key={s.l} className="card" style={{ textAlign: 'center', padding: 13 }}>
                 <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>{s.l}</div>
@@ -891,7 +871,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   <Avatar name={t.name} size={46} color={t.color} photo={t.photo} />
                   <div>
                     <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: t.color, letterSpacing: 1.5 }}>{t.name}</div>
-                    <div style={{ color: 'var(--t3)', fontSize: 12 }}>{(t.squad || []).length} players · ₹{t.spent}L spent of ₹{t.budget}L</div>
+                    <div style={{ color: 'var(--t3)', fontSize: 12 }}>{(t.squad || []).length} players · ₹{t.spent || 0}L spent of ₹{t.budget || 0}L</div>
                   </div>
                 </div>
                 {(t.squad || []).length === 0
@@ -935,7 +915,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             {[
               { l: 'Players Sold', v: safeSoldLog.length, c: 'var(--g)' },
               { l: 'Unsold', v: safeUnsoldLog.length, c: 'var(--re)' },
-              { l: 'Total Spent', v: `₹${safeParticipants.reduce((a, b) => a + b.spent, 0)}L`, c: 'var(--or)' },
+              { l: 'Total Spent', v: `₹${safeParticipants.reduce((a, b) => a + (b.spent || 0), 0)}L`, c: 'var(--or)' },
               { l: 'Avg Sale', v: safeSoldLog.length ? `₹${Math.round(safeSoldLog.reduce((a, b) => a + b.price, 0) / safeSoldLog.length)}L` : '—', c: 'var(--bl)' },
             ].map((s) => (
               <div key={s.l} className="card" style={{ textAlign: 'center', padding: 13 }}>
@@ -950,7 +930,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               const aLen = (a.squad || []).length;
               const bLen = (b.squad || []).length;
               if (bLen !== aLen) return bLen - aLen;
-              return (b.budget - b.spent) - (a.budget - a.spent);
+              return ((b.budget || 0) - (b.spent || 0)) - ((a.budget || 0) - (a.spent || 0));
             });
             const winner = ranked[0];
             if (!winner) return null;
@@ -974,11 +954,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   </div>
                   <div>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Spent</div>
-                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--or)' }}>₹{winner.spent}L</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--or)' }}>₹{winner.spent || 0}L</div>
                   </div>
                   <div>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Budget Left</div>
-                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)' }}>₹{winner.budget - winner.spent}L</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)' }}>₹{(winner.budget || 0) - (winner.spent || 0)}L</div>
                   </div>
                 </div>
                 {ranked.length > 1 && (
@@ -1004,13 +984,13 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, background: 'var(--g)', borderRadius: 2, display: 'inline-block' }} /> Spent</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, background: 'var(--bd2)', borderRadius: 2, display: 'inline-block' }} /> Remaining</span>
               </div>
-              <BarChart data={safeParticipants.map((p) => ({ name: p.name, spent: p.spent, remaining: p.budget - p.spent }))} />
+              <BarChart data={safeParticipants.map((p) => ({ name: p.name, spent: p.spent || 0, remaining: (p.budget || 0) - (p.spent || 0) }))} />
             </div>
             <div className="card" style={{ padding: 18 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Spend Distribution</div>
-              <DonutChart data={safeParticipants.filter((p) => p.spent > 0).map((p) => ({ name: p.name, value: p.spent, color: p.color }))} />
+              <DonutChart data={safeParticipants.filter((p) => (p.spent || 0) > 0).map((p) => ({ name: p.name, value: p.spent || 0, color: p.color }))} />
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                {safeParticipants.filter((p) => p.spent > 0).map((p) => (
+                {safeParticipants.filter((p) => (p.spent || 0) > 0).map((p) => (
                   <span key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--t2)' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
                     {p.name}
