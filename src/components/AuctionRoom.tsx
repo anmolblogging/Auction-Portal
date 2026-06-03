@@ -184,35 +184,40 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   // Smooth client-side timer tick sync from server's endsAt timestamp
   useEffect(() => {
     let mounted = true;
-    transitionRef.current = false; // Reset when roomState updates
+
     const timer = setInterval(() => {
       if (roomState && roomState.endsAt) {
-        const left = Math.max(0, Math.ceil((roomState.endsAt - Date.now()) / 1000));
-        if (roomState.phase === 'bidding') setTimeLeft(left);
+        const endsAt = roomState.endsAt;
+        const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+        
+        if (roomState.phase === 'bidding') {
+          setTimeLeft(left);
+        }
 
-        // When timer hits 0, ping server once to process phase transition (sold/unsold/next)
+        // When timer hits 0, ping server to process phase transition
         if (left === 0 && !transitionRef.current && (roomState.phase === 'bidding' || roomState.phase === 'sold' || roomState.phase === 'unsold')) {
-          transitionRef.current = true;
+          
+          transitionRef.current = true; // Lock active
+          
           fetch(`/api/rooms/${roomState.id}?t=${Date.now()}`, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
-              if (data.room) {
-                // ALWAYS update the UI with the fresh server state.
-                // This instantly fixes the timer if we missed a Realtime WebSocket event 
-                // (e.g. someone bid, extending the timer, but our browser didn't get the ping).
-                if (mounted) setRoomState(data.room);
+              if (data.room && mounted) {
+                // Instantly update UI with fresh server state
+                setRoomState(data.room);
                 
                 if (data.room.phase === roomState.phase) {
-                  // If phase didn't advance (clock skew or timer was extended), reset ref to allow future pings
-                  setTimeout(() => { transitionRef.current = false; }, 500);
+                  // If phase didn't advance, allow pinging again after a delay to prevent spam
+                  setTimeout(() => { transitionRef.current = false; }, 2000);
                 } else {
-                  // Server successfully advanced the phase
+                  // Phase successfully advanced, release the lock
                   transitionRef.current = false;
                 }
               }
             })
             .catch(() => {
-              setTimeout(() => { transitionRef.current = false; }, 1000);
+              // On error, release the lock after a delay so it can try again
+              setTimeout(() => { transitionRef.current = false; }, 2000);
             });
         }
       }
@@ -227,8 +232,9 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   // Timer for scheduled auto-start countdown
   useEffect(() => {
     if (roomState && roomState.phase === 'scheduled' && roomState.scheduledAt) {
+      const scheduledAt = roomState.scheduledAt;
       const update = () => {
-        setTimeToStart(Math.max(0, roomState.scheduledAt! - Date.now()));
+        setTimeToStart(Math.max(0, scheduledAt - Date.now()));
       };
       update();
       const timer = setInterval(update, 250);
