@@ -11,7 +11,6 @@ import Spinner from '@/components/ui/Spinner';
 import { ServerRoom } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { playBidSound, playCountdownSound, playSoldSound } from '@/lib/sounds';
-import { playerFlag } from '@/lib/flags';
 
 const BID_TIMER_SECONDS = 30;
 
@@ -23,13 +22,12 @@ interface AuctionRoomProps {
   onLeave: () => void;
 }
 
-type Tab = 'live' | 'myteam' | 'allteams' | 'unsold' | 'analytics';
+type Tab = 'live' | 'myteam' | 'allteams' | 'analytics';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'live', label: '🔴 Live Auction' },
   { id: 'myteam', label: '👤 My Team' },
   { id: 'allteams', label: '🏆 All Teams' },
-  { id: 'unsold', label: '🚫 Unsold' },
   { id: 'analytics', label: '📊 Analytics' },
 ];
 
@@ -44,13 +42,13 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   const [notFound, setNotFound] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
-  const [splitPct, setSplitPct] = useState(42); // percentage for bid history height
+  const [splitPct, setSplitPct] = useState(42); 
   const [timeToStart, setTimeToStart] = useState<number>(0);
   const [launchOverlay, setLaunchOverlay] = useState<number | string | null>(null);
   const lastPhaseRef = useRef<string | null>(null);
 
   const formatTimeToStart = (ms: number) => {
-    if (ms <= 0) return '00:00:00';
+    if (isNaN(ms) || ms <= 0) return '00:00:00';
     const totalSecs = Math.floor(ms / 1000);
     const secs = totalSecs % 60;
     const mins = Math.floor(totalSecs / 60) % 60;
@@ -76,8 +74,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       ['Team Name', 'Player Name', 'Role', 'Country', 'Sold Price (₹L)'],
     ];
 
-    roomState.participants.forEach((team: any) => {
-      if (team.squad.length === 0) {
+    (roomState.participants || []).forEach((team: any) => {
+      if (!team.squad || team.squad.length === 0) {
         rows.push([team.name, 'No players', '', '', '']);
         return;
       }
@@ -95,9 +93,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
     const csv = rows
       .map((row) =>
-        row
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-          .join(',')
+        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')
       )
       .join('\n');
 
@@ -110,116 +106,98 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     URL.revokeObjectURL(url);
   };
 
-  // Subscribe to Supabase Realtime for instant updates; initial fetch on mount
-  useEffect(() => {
+useEffect(() => {
     let active = true;
 
     async function fetchState() {
       try {
         const res = await fetch(`/api/rooms/${roomId}?t=${Date.now()}`, { cache: 'no-store' });
+        
         if (res.status === 404) {
-          // Room genuinely doesn't exist (e.g. an old/expired code) — show a clear
-          // message instead of spinning forever or hammering a 500 loop.
           if (active) setNotFound(true);
           return;
         }
+        
+        // If the server is busy/rebooting, exit quietly to prevent red error screens
+        if (!res.ok) return; 
+
         const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        if (active) { setNotFound(false); setRoomState(data.room); }
+        if (data.error) return; 
+        
+        if (active) { 
+          setNotFound(false); 
+          setRoomState(data.room); 
+        }
       } catch (err) {
-        console.error('Error fetching room state:', err);
+        // Silently swallow "Failed to fetch" network errors when the server blips
       }
     }
 
-    // Fetch once immediately
     fetchState();
 
-    // Poll every 3s as a baseline in ALL modes. In local-file mode there is no
-    // realtime channel, so without this the room never refreshes and the
-    // auction appears stuck (bots/timer transitions are processed server-side
-    // on each GET). In Supabase mode it's a safety net if the socket drops.
-    const pollInterval = setInterval(() => {
-      if (active) fetchState();
-    }, 3000);
-
-    // Subscribe via WebSocket — triggers fetchState() when room row changes.
-    // Guard: supabase is null when NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are missing (local file fallback mode).
     if (!supabase) {
-      return () => { active = false; clearInterval(pollInterval); };
+      // If no Supabase, poll every 1 second instead of doing nothing
+      const localInterval = setInterval(() => { if (active) fetchState(); }, 1000);
+      return () => { active = false; clearInterval(localInterval); };
     }
 
     const channelName = `room-changes-${roomId}`;
     const channel = supabase
       .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'rooms' },
-        () => {
-          // Re-fetch full room state (includes teams, bids, chat via getRoom)
-          if (active) fetchState();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        () => {
-          if (active) fetchState();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bids' },
-        () => {
-          if (active) fetchState();
-        }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms' }, () => {
+        if (active) fetchState();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
+        if (active) fetchState();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => {
+        if (active) fetchState();
+      })
       .subscribe();
+
+    // SPEED FIX: Lowered fallback from 3000ms to 1000ms
+    const fallbackInterval = setInterval(() => {
+      if (active) fetchState();
+    }, 1000);
 
     return () => {
       active = false;
-      clearInterval(pollInterval);
+      clearInterval(fallbackInterval);
       supabase!.removeChannel(channel);
     };
   }, [roomId]);
 
   const transitionRef = useRef(false);
 
-  // Smooth client-side timer tick sync from server's endsAt timestamp
   useEffect(() => {
     let mounted = true;
 
     const timer = setInterval(() => {
       if (roomState && roomState.endsAt) {
-        const endsAt = roomState.endsAt;
-        const left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+        // BUGFIX: Convert endsAt to a strict number to prevent NaN crashes
+        const endsAtMs = new Date(roomState.endsAt).getTime();
+        const left = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000));
         
         if (roomState.phase === 'bidding') {
           setTimeLeft(left);
         }
 
-        // When timer hits 0, ping server to process phase transition
         if (left === 0 && !transitionRef.current && (roomState.phase === 'bidding' || roomState.phase === 'sold' || roomState.phase === 'unsold')) {
-          
-          transitionRef.current = true; // Lock active
+          transitionRef.current = true;
           
           fetch(`/api/rooms/${roomState.id}?t=${Date.now()}`, { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
               if (data.room && mounted) {
-                // Instantly update UI with fresh server state
                 setRoomState(data.room);
-                
                 if (data.room.phase === roomState.phase) {
-                  // If phase didn't advance, allow pinging again after a delay to prevent spam
                   setTimeout(() => { transitionRef.current = false; }, 2000);
                 } else {
-                  // Phase successfully advanced, release the lock
                   transitionRef.current = false;
                 }
               }
             })
             .catch(() => {
-              // On error, release the lock after a delay so it can try again
               setTimeout(() => { transitionRef.current = false; }, 2000);
             });
         }
@@ -232,12 +210,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     };
   }, [roomState]);
 
-  // Timer for scheduled auto-start countdown
   useEffect(() => {
     if (roomState && roomState.phase === 'scheduled' && roomState.scheduledAt) {
-      const scheduledAt = roomState.scheduledAt;
+      // BUGFIX: Date conversion
+      const scheduledAtMs = new Date(roomState.scheduledAt).getTime();
       const update = () => {
-        setTimeToStart(Math.max(0, scheduledAt - Date.now()));
+        setTimeToStart(Math.max(0, scheduledAtMs - Date.now()));
       };
       update();
       const timer = setInterval(update, 250);
@@ -245,7 +223,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     }
   }, [roomState?.phase, roomState?.scheduledAt]);
 
-  // Monitor phase transitions to trigger 3-2-1 launch animation
   useEffect(() => {
     if (!roomState) return;
 
@@ -274,14 +251,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     lastPhaseRef.current = roomState.phase;
   }, [roomState?.phase]);
 
-  // Auto-scroll chat on change
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [roomState?.chat]);
 
-  // Auto-switch to analytics tab when auction ends
   useEffect(() => {
     if (roomState?.phase === 'done') {
       const t = setTimeout(() => setTab('analytics'), 0);
@@ -289,7 +264,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     }
   }, [roomState?.phase]);
 
-  // --- SOUND EFFECTS ---
   const lastBidRef = useRef(roomState?.currentBid);
   useEffect(() => {
     if (roomState?.phase === 'bidding' && roomState.currentBid > (lastBidRef.current || 0)) {
@@ -319,17 +293,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       const res = await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: { type: 'START' },
-          userId,
-        }),
+        body: JSON.stringify({ action: { type: 'START' }, userId }),
       });
       const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
-        setRoomState(data.room);
-      }
+      if (data.error) alert(data.error);
+      else setRoomState(data.room);
     } catch (err) {
       console.error('Failed to start auction:', err);
     } finally {
@@ -344,17 +312,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       const res = await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: { type: 'BID', bidder: teamId, amount: increment },
-          userId,
-        }),
+        body: JSON.stringify({ action: { type: 'BID', bidder: teamId, amount: increment }, userId }),
       });
       const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
-        setRoomState(data.room);
-      }
+      if (data.error) alert(data.error);
+      else setRoomState(data.room);
     } catch (err) {
       console.error('Failed to place bid:', err);
     } finally {
@@ -373,17 +335,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       const res = await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: { type: 'SKIP' },
-          userId,
-        }),
+        body: JSON.stringify({ action: { type: 'SKIP' }, userId }),
       });
       const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
-        setRoomState(data.room);
-      }
+      if (data.error) alert(data.error);
+      else setRoomState(data.room);
     } catch (err) {
       console.error('Failed to skip player:', err);
     } finally {
@@ -393,23 +349,17 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   async function handlePass() {
     if (!roomState || roomState.phase !== 'bidding' || submitting) return;
-    if (roomState.currentBidder === teamId) return; // can't pass while winning
+    if (roomState.currentBidder === teamId) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: { type: 'PASS', bidder: teamId },
-          userId,
-        }),
+        body: JSON.stringify({ action: { type: 'PASS', bidder: teamId }, userId }),
       });
       const data = await res.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
-        setRoomState(data.room);
-      }
+      if (data.error) alert(data.error);
+      else setRoomState(data.room);
     } catch (err) {
       console.error('Failed to pass:', err);
     } finally {
@@ -420,22 +370,16 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   async function handleSendChat() {
     if (!chatMsg.trim() || !roomState) return;
     const msgToSend = chatMsg.trim();
-    setChatMsg(''); // clear locally instantly
+    setChatMsg(''); 
     try {
       const res = await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: { type: 'CHAT', msg: msgToSend, user: userName || 'Guest' },
-          userId,
-        }),
+        body: JSON.stringify({ action: { type: 'CHAT', msg: msgToSend, user: userName || 'Guest' }, userId }),
       });
       const data = await res.json();
-      if (data.error) {
-        console.error(data.error);
-      } else {
-        setRoomState(data.room);
-      }
+      if (data.error) console.error(data.error);
+      else setRoomState(data.room);
     } catch (err) {
       console.error('Failed to send chat message:', err);
     }
@@ -446,7 +390,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, padding: 24, textAlign: 'center' }}>
         <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 56, letterSpacing: 3, color: 'var(--t3)' }}>ROOM NOT FOUND</div>
         <div style={{ fontFamily: "'Rajdhani', sans-serif", color: 'var(--t2)', fontSize: 15, maxWidth: 420, lineHeight: 1.6 }}>
-          Room <strong style={{ color: 'var(--t1)' }}>{roomId}</strong> doesn&apos;t exist or has expired. Ask the host for a current invite code, or create a new room.
+          Room <strong style={{ color: 'var(--t1)' }}>{roomId}</strong> doesn't exist or has expired. Ask the host for a current invite code, or create a new room.
         </div>
         <button className="btn bp" onClick={onLeave} style={{ marginTop: 6 }}>Back to Home</button>
       </div>
@@ -462,16 +406,22 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     );
   }
 
-  // ── LOBBY / SCHEDULED SCREEN ──
+  const safeParticipants = roomState.participants || [];
+  const safePlayers = roomState.players || [];
+  const safeChat = roomState.chat || [];
+  const safeBidHistory = roomState.bidHistory || [];
+  const safeSoldLog = roomState.soldLog || [];
+  const safeUnsoldLog = roomState.unsoldLog || [];
+
   if (roomState.phase === 'lobby' || roomState.phase === 'scheduled') {
     const isHost = roomState.hostId === userId;
     const isScheduled = roomState.phase === 'scheduled';
-    const totalTeams = roomState.participants.length;
-    const joinedTeams = roomState.participants.filter((p) => p.ownerId !== null).length;
+    const totalTeams = safeParticipants.length;
+    const joinedTeams = safeParticipants.filter((p) => p.ownerId !== null).length;
     const allTeamsJoined = roomState.enableBots ? (joinedTeams >= 1) : (joinedTeams === totalTeams);
+
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-        {/* Header */}
         <div style={{ padding: '13px 36px', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--g)', letterSpacing: 2 }}>SAR</span>
@@ -481,13 +431,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           <button className="btn bs bsm" onClick={onLeave}>Leave Room</button>
         </div>
 
-        <div className="lobby-grid" style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20, padding: 24, maxWidth: 1100, width: '100%', margin: '0 auto', overflow: 'hidden', minHeight: 0 }}>
-          {/* Left Panel: Teams & Players */}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20, padding: 24, maxWidth: 1100, width: '100%', margin: '0 auto', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflow: 'auto' }}>
             <div className="card" style={{ flex: 1, padding: 20 }}>
               <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2, marginBottom: 12 }}>Connected Teams</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {roomState.participants.map((p) => {
+                {safeParticipants.map((p) => {
                   const isUserTeam = p.id === teamId;
                   return (
                     <div key={p.id} className="card hover-lift" style={{ padding: 12, border: `1px solid ${p.color}${isUserTeam ? '' : '33'}`, background: isUserTeam ? `${p.color}08` : 'var(--bg3)' }}>
@@ -506,7 +455,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               </div>
             </div>
 
-            {/* Config Box */}
             <div className="card hover-lift" style={{ padding: 16 }}>
               <h4 style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 12, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Room Settings</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
@@ -520,7 +468,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                 </div>
                 <div style={{ background: 'var(--bg3)', padding: 8, borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 9, color: 'var(--t3)' }}>PLAYERS</div>
-                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: 'var(--t1)', marginTop: 2 }}>{roomState.players.length}</div>
+                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: 'var(--t1)', marginTop: 2 }}>{safePlayers.length}</div>
                 </div>
                 <div style={{ background: 'var(--bg3)', padding: 8, borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 9, color: 'var(--t3)' }}>BOTS</div>
@@ -532,9 +480,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             </div>
           </div>
 
-          {/* Right Panel: Lobby Chat & Start Action */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
-            {/* Action Box */}
             <div className="card hover-lift" style={{ padding: 20, textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10 }}>
               <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: 'var(--t2)' }}>INVITE CODE</div>
               <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 36, color: 'var(--g)', letterSpacing: 4, background: 'var(--bg3)', padding: '8px 0', borderRadius: 8, border: '1px solid var(--bd2)' }}>
@@ -544,16 +490,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
               {isScheduled ? (
                 <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{
-                    background: 'var(--bg3)',
-                    border: '1px solid var(--bd2)',
-                    borderRadius: 10,
-                    padding: 14,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 6
-                  }}>
+                  <div style={{ background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--am)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
                       📅 Scheduled Auction
                     </div>
@@ -595,11 +532,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               )}
             </div>
 
-            {/* Chat Box */}
             <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16, overflow: 'hidden', minHeight: 0 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8 }}>Lobby Chat</div>
               <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5, paddingRight: 4 }}>
-                {roomState.chat.map((c) => (
+                {safeChat.map((c) => (
                   <div key={c.id} style={{ fontSize: 12, lineHeight: 1.4 }}>
                     <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, marginRight: 4, color: c.user === userName ? 'var(--g)' : c.user === 'System' ? 'var(--am)' : 'var(--t2)' }}>{c.user}:</span>
                     <span style={{ color: 'var(--t2)' }}>{c.msg}</span>
@@ -617,9 +553,9 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     );
   }
 
-  const pl = roomState.players[roomState.playerIdx];
-  const me = roomState.participants.find((p) => p.id === teamId) || roomState.participants[0];
-  const win = roomState.participants.find((p) => p.id === roomState.currentBidder);
+  const pl = safePlayers[roomState.playerIdx];
+  const me = safeParticipants.find((p) => p.id === teamId) || safeParticipants[0];
+  const win = safeParticipants.find((p) => p.id === roomState.currentBidder);
   const tc = timeLeft > 10 ? 'var(--g)' : timeLeft > 5 ? 'var(--am)' : 'var(--re)';
   const isEnd = roomState.phase === 'sold' || roomState.phase === 'unsold' || roomState.phase === 'done';
   const isHost = roomState.hostId === userId;
@@ -627,9 +563,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   const hasPassed = !!roomState.passedBy?.includes(teamId);
   const isHighBidder = roomState.currentBidder === teamId;
 
-  // Effective budget left — subtracts a participant's standing bid so their
-  // available budget visibly drops the moment they become the highest bidder
-  // (the actual `spent` only updates once the player is sold).
   const availLeft = (p: { id: string; budget: number; spent: number }) => {
     const pending = (roomState.currentBidder === p.id && (roomState.phase === 'bidding' || roomState.phase === 'sold'))
       ? roomState.currentBid
@@ -638,14 +571,13 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   };
 
   return (
-    <div className="auction-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-      {/* Top nav + tabs */}
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
       <div style={{ borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', height: 54, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--g)', letterSpacing: 2 }}>SAR</span>
           <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 6 }}>Code: {roomState.id}</span>
         </div>
-        <div className="auction-tabs" style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               style={{ padding: '6px 14px', border: 'none', background: tab === t.id ? 'var(--bg3)' : 'transparent', color: tab === t.id ? 'var(--t1)' : 'var(--t3)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: .5, cursor: 'pointer', borderRadius: 7, borderBottom: tab === t.id ? `2px solid var(--g)` : '2px solid transparent', transition: 'all .2s' }}>
@@ -655,20 +587,19 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)' }}>
-            {roomState.playerIdx + 1}/{roomState.players.length} players
+            {roomState.playerIdx + 1}/{safePlayers.length} players
           </div>
           <button className="btn bs bsm" onClick={onLeave} style={{ padding: '4px 10px' }}>Leave</button>
         </div>
       </div>
 
-      {/* ── LIVE TAB ── */}
       {tab === 'live' && (
         <div className="auction-grid" style={{ flex: 1 }}>
-          {/* Left: Team sidebar */}
-          <div className="auction-teams" style={{ background: 'var(--bg2)', borderRight: '1px solid var(--bd)', overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ background: 'var(--bg2)', borderRight: '1px solid var(--bd)', overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 4 }}>Teams</div>
-            {roomState.participants.map((p) => {
+            {safeParticipants.map((p) => {
               const isBidder = roomState.currentBidder === p.id;
+              const squadSafe = p.squad || [];
               return (
                 <div key={p.id} className="card hover-lift" style={{ 
                   padding: '10px 12px', 
@@ -689,7 +620,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                       <strong style={{ color: isBidder ? p.color : 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>₹{availLeft(p)}L</strong> left
                     </span>
                     <span>
-                      <strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>{p.squad.length}</strong>/{roomState.squadSize}
+                      <strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>{squadSafe.length}</strong>/{roomState.squadSize}
                     </span>
                   </div>
                   <div style={{ marginTop: 5, height: 3, background: 'var(--bd2)', borderRadius: 2 }}>
@@ -700,8 +631,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             })}
           </div>
 
-          {/* Center: Bidding */}
-          <div className="auction-main" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', padding: 14, gap: 11 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', padding: 14, gap: 11 }}>
             {isEnd ? (
               <div key={`end${roomState.playerIdx}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                 <div key={roomState.phase} className={roomState.phase === 'sold' ? 'anim-stamp' : ''} style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 80, letterSpacing: 5, color: roomState.phase === 'sold' ? 'var(--g)' : roomState.phase === 'done' ? 'var(--g)' : 'var(--t3)', textShadow: roomState.phase === 'sold' ? '0 0 44px rgba(0,220,114,.4)' : 'none' }}>
@@ -723,7 +653,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               </div>
             ) : (
               <div key={`bid${roomState.playerIdx}`} style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-                {/* Player card */}
                 {pl && (
                   <div className="card hover-lift" style={{ border: `2px solid ${(ROLE_COLORS[pl.role] || '#888')}33`, padding: 18, display: 'flex', gap: 14, alignItems: 'center', animation: 'slideIn .4s cubic-bezier(0.4, 0, 0.2, 1)' }}>
                     <div style={{ width: 64, height: 64, borderRadius: 12, background: (ROLE_COLORS[pl.role] || '#888') + '22', border: `2px solid ${ROLE_COLORS[pl.role] || '#888'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: ROLE_COLORS[pl.role] || '#888', flexShrink: 0 }}>
@@ -732,7 +661,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
                         <TBadge tier={pl.tier} /><RBadge role={pl.role} />
-                        <span style={{ fontSize: 13 }}>{playerFlag(pl)}</span>
+                        <span style={{ fontSize: 13 }}>{pl.nat || '🌍'}</span>
                       </div>
                       <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>{pl.name}</div>
                       <div style={{ color: 'var(--t2)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", marginTop: 2 }}>{pl.country}</div>
@@ -740,13 +669,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 1 }}>Base</div>
                       <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--t2)', letterSpacing: 2 }}>₹{pl.base}L</div>
-                      <div style={{ color: 'var(--t3)', fontSize: 10, marginTop: 2 }}>{roomState.playerIdx + 1}/{roomState.players.length}</div>
+                      <div style={{ color: 'var(--t3)', fontSize: 10, marginTop: 2 }}>{roomState.playerIdx + 1}/{safePlayers.length}</div>
                     </div>
                   </div>
                 )}
 
-                {/* Timer + Bid */}
-                <div className="two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div className={`card ${timeLeft <= 5 ? 'anim-urgent' : 'hover-lift'}`} style={{ textAlign: 'center', padding: 14 }}>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 1 }}>Time Left</div>
                     <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 62, color: tc, letterSpacing: 2, lineHeight: 1, transition: 'color .3s' }}>
@@ -763,7 +691,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   </div>
                 </div>
 
-                {/* Bid controls */}
                 <div className="card" style={{ padding: 13 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase' }}>Your Bid</div>
@@ -774,7 +701,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 9 }}>
-                    {[50, 100].map((inc) => (
+                    {[10, 20].map((inc) => (
                       <button key={inc} className="btn bp"
                         onClick={() => handleBid(inc)}
                         disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || hasPassed || submitting || (me && me.spent + roomState.currentBid + inc > me.budget)}
@@ -791,7 +718,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     ))}
                   </div>
 
-                  {/* Pass — opt out of the current player */}
                   {!isHighBidder && (
                     <button
                       className="btn bs"
@@ -849,16 +775,15 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                         <div style={{ width: 1, height: 30, background: 'var(--bd2)' }} />
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                           <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--t3)', marginBottom: 2 }}>Squad Size</span>
-                          <span><strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1 }}>{me.squad.length}</strong><span style={{ opacity: 0.5 }}>/{roomState.squadSize}</span></span>
+                          <span><strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1 }}>{(me.squad || []).length}</strong><span style={{ opacity: 0.5 }}>/{roomState.squadSize}</span></span>
                         </div>
                       </div>
 
-                      {/* 1. ROLE DISTRIBUTION */}
-                      {me.squad.length > 0 && (
+                      {(me.squad || []).length > 0 && (
                         <div style={{ padding: 10, background: 'var(--bg3)', borderRadius: 8, border: '1px solid var(--bd2)' }}>
                           <div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--t3)', letterSpacing: 1, marginBottom: 6 }}>Your Squad Balance</div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {Object.entries(me.squad.reduce((acc, p) => ({ ...acc, [p.role]: (acc[p.role] || 0) + 1 }), {} as Record<string, number>)).map(([r, c]) => (
+                            {Object.entries((me.squad || []).reduce((acc: Record<string, number>, p: any) => ({ ...acc, [p.role]: (acc[p.role] || 0) + 1 }), {})).map(([r, c]) => (
                               <span key={r} style={{ fontSize: 12, padding: '6px 12px', background: 'var(--bg2)', borderRadius: 6, border: '1px solid var(--bd)', color: 'var(--t2)', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
                                 <span style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{r}</span> <strong style={{ color: 'var(--t1)', fontSize: 15 }}>{c as number}</strong>
                               </span>
@@ -867,9 +792,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                         </div>
                       )}
 
-                      {/* 3. UPCOMING PLAYERS */}
                       {(() => {
-                        const upcoming = roomState.players.slice(roomState.playerIdx + 1, roomState.playerIdx + 4);
+                        const upcoming = safePlayers.slice(roomState.playerIdx + 1, roomState.playerIdx + 4);
                         if (upcoming.length === 0) return null;
                         return (
                           <div style={{ padding: 10, background: 'var(--bg3)', borderRadius: 8, border: '1px solid var(--bd2)' }}>
@@ -879,9 +803,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--t2)', background: 'var(--bg2)', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--bd)' }}>
                                   <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <span style={{ opacity: 0.5, fontSize: 10 }}>#{roomState.playerIdx + 2 + idx}</span>
-                                    <span style={{ fontWeight: 600, color: 'var(--t1)', textTransform: 'uppercase' }}>{p.name}</span>
+                                    <span style={{ fontWeight: 600, color: 'var(--t1)', textTransform: 'uppercase' }}>{p.name}</span> 
                                     <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--bg3)', borderRadius: 4 }}>{p.role}</span>
-                                    {p.country && <span style={{ fontSize: 10, color: 'var(--t3)' }}>{playerFlag(p)} {p.country}</span>}
                                   </span>
                                   <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, letterSpacing: 0.5, color: 'var(--t3)' }}>₹{p.base}L</span>
                                 </div>
@@ -897,15 +820,13 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             )}
           </div>
 
-          {/* Right: History + Chat */}
-          <div ref={rightPanelRef} className="auction-chat" style={{ background: 'var(--bg2)', borderLeft: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            {/* Bid History */}
+          <div ref={rightPanelRef} style={{ background: 'var(--bg2)', borderLeft: '1px solid var(--bd)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
             <div style={{ height: `${splitPct}%`, overflow: 'auto', padding: 10, flexShrink: 0 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 7 }}>Bid History</div>
-              {roomState.bidHistory.length === 0
+              {safeBidHistory.length === 0
                 ? <div style={{ color: 'var(--t3)', fontSize: 12, textAlign: 'center', padding: '12px 0' }}>No bids yet</div>
-                : roomState.bidHistory.map((b, i) => {
-                  const tm = roomState.participants.find((p) => p.id === b.bidder);
+                : safeBidHistory.map((b, i) => {
+                  const tm = safeParticipants.find((p) => p.id === b.bidder);
                   return (
                     <div key={b.id || i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: '1px solid var(--bd)', opacity: Math.max(.2, 1 - i * .08), animation: i === 0 ? 'slideIn .4s cubic-bezier(0.4, 0, 0.2, 1)' : 'none' }}>
                       <div style={{ width: 4, height: 4, borderRadius: '50%', background: tm?.color || 'var(--t3)', flexShrink: 0 }} />
@@ -917,7 +838,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               }
             </div>
 
-            {/* Drag Handle */}
             <div
               style={{ height: 6, cursor: 'row-resize', background: 'var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, userSelect: 'none', transition: 'background 0.2s' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--g)')}
@@ -947,8 +867,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
               <div ref={chatRef} style={{ flex: 1, overflow: 'auto', padding: 9, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 5 }}>Chat</div>
-                {roomState.chat.map((c, i) => (
-                  <div key={c.id} style={{ fontSize: 12, lineHeight: 1.4, animation: i === roomState.chat.length - 1 ? 'slideIn .3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none' }}>
+                {safeChat.map((c, i) => (
+                  <div key={c.id} style={{ fontSize: 12, lineHeight: 1.4, animation: i === safeChat.length - 1 ? 'slideIn .3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none' }}>
                     <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, marginRight: 4, color: c.user === userName ? 'var(--g)' : c.user === 'System' ? 'var(--am)' : 'var(--t2)' }}>{c.user}:</span>
                     <span style={{ color: 'var(--t2)' }}>{c.msg}</span>
                   </div>
@@ -965,15 +885,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         </div>
       )}
 
-      {/* ── MY TEAM TAB ── */}
       {tab === 'myteam' && me && (
         <div style={{ padding: 22, maxWidth: 900, margin: '0 auto', width: '100%' }}>
-          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
             {[
               { l: 'Budget Left', v: `₹${me.budget - me.spent}L`, c: 'var(--g)' },
               { l: 'Spent', v: `₹${me.spent}L`, c: 'var(--or)' },
-              { l: 'Players', v: `${me.squad.length}/${roomState.squadSize}`, c: 'var(--bl)' },
-              { l: 'Avg Price', v: me.squad.length ? `₹${Math.round(me.spent / me.squad.length)}L` : '—', c: 'var(--pu)' },
+              { l: 'Players', v: `${(me.squad || []).length}/${roomState.squadSize}`, c: 'var(--bl)' },
+              { l: 'Avg Price', v: (me.squad || []).length ? `₹${Math.round(me.spent / (me.squad || []).length)}L` : '—', c: 'var(--pu)' },
             ].map((s) => (
               <div key={s.l} className="card" style={{ textAlign: 'center', padding: 13 }}>
                 <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>{s.l}</div>
@@ -981,15 +900,15 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               </div>
             ))}
           </div>
-          {me.squad.length === 0
+          {(me.squad || []).length === 0
             ? <div style={{ textAlign: 'center', color: 'var(--t3)', padding: 70, fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>No players yet — start bidding!</div>
             : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(185px,1fr))', gap: 10 }}>
-              {me.squad.map((p, i) => (
+              {(me.squad || []).map((p: any, i: number) => (
                 <div key={String(p.id)} className="card hover-lift" style={{ padding: 13, border: `1px solid ${(ROLE_COLORS[p.role] || '#888')}33`, animation: `fadeUp 0.4s ease forwards`, animationDelay: `${i * 0.05}s`, opacity: 0 }}>
                   <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}><RBadge role={p.role} /><TBadge tier={p.tier} /></div>
                   <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, color: 'var(--t1)', marginBottom: 2 }}>{p.name}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{playerFlag(p)}{p.country ? ` ${p.country}` : ''}</span>
+                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{p.nat || '🌍'}</span>
                     <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--g)', letterSpacing: 1 }}>₹{p.soldPrice}L</span>
                   </div>
                 </div>
@@ -999,23 +918,22 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         </div>
       )}
 
-      {/* ── ALL TEAMS TAB ── */}
       {tab === 'allteams' && (
         <div style={{ padding: 22, maxWidth: 1400, margin: '0 auto', width: '100%', overflowX: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
-            {roomState.participants.map((t) => (
+            {safeParticipants.map((t) => (
               <div key={t.id} style={{ border: `1px solid ${t.color}33`, borderRadius: 12, padding: 18, background: 'var(--bg2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 16 }}>
                   <Avatar name={t.name} size={46} color={t.color} photo={t.photo} />
                   <div>
                     <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: t.color, letterSpacing: 1.5 }}>{t.name}</div>
-                    <div style={{ color: 'var(--t3)', fontSize: 12 }}>{t.squad.length} players · ₹{t.spent}L spent of ₹{t.budget}L</div>
+                    <div style={{ color: 'var(--t3)', fontSize: 12 }}>{(t.squad || []).length} players · ₹{t.spent}L spent of ₹{t.budget}L</div>
                   </div>
                 </div>
-                {t.squad.length === 0
+                {(t.squad || []).length === 0
                   ? <div style={{ textAlign: 'center', color: 'var(--t3)', padding: '30px 0', fontFamily: "'Rajdhani', sans-serif" }}>No players yet</div>
                   : <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-                    {t.squad.map((p) => (
+                    {(t.squad || []).map((p: any) => (
                       <div key={String(p.id)} className="card" style={{ padding: '12px 14px', border: `1px solid ${t.color}22`, background: 'var(--bg1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)' }}>{p.name}</div>
@@ -1025,7 +943,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 2 }}>{playerFlag(p)}{p.country ? ` ${p.country}` : ''}</div>
+                          <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 2 }}>{p.nat || '🌍'}</div>
                           <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: 'var(--g)' }}>₹{p.soldPrice}L</div>
                         </div>
                       </div>
@@ -1038,40 +956,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         </div>
       )}
 
-      {/* ── UNSOLD TAB ── */}
-      {tab === 'unsold' && (
-        <div style={{ padding: 22, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, letterSpacing: 2 }}>UNSOLD PLAYERS</div>
-            <div style={{ color: 'var(--t3)', fontSize: 12 }}>
-              {roomState.unsoldLog.length} player{roomState.unsoldLog.length === 1 ? '' : 's'} went unsold — no team placed a bid.
-            </div>
-          </div>
-          {roomState.unsoldLog.length === 0 ? (
-            <div style={{ textAlign: 'center', color: 'var(--t3)', padding: 70, fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>
-              No unsold players yet.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 12 }}>
-              {roomState.unsoldLog.map((p) => (
-                <div key={String(p.id)} className="card" style={{ padding: 14, border: `1px solid ${(ROLE_COLORS[p.role] || '#888')}33`, opacity: 0.92 }}>
-                  <div style={{ display: 'flex', gap: 5, marginBottom: 8 }}>
-                    <RBadge role={p.role} />
-                    <TBadge tier={p.tier} />
-                  </div>
-                  <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)', marginBottom: 3 }}>{p.name}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{playerFlag(p)}{p.country ? ` ${p.country}` : ''}</span>
-                    <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: 'var(--t3)', letterSpacing: 1 }}>Base ₹{p.base}L</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── ANALYTICS TAB ── */}
       {tab === 'analytics' && (
         <div style={{ padding: 22, maxWidth: 1000, margin: '0 auto', width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -1083,12 +967,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               Download Results
             </button>
           </div>
-          <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 18 }}>
             {[
-              { l: 'Players Sold', v: roomState.soldLog.length, c: 'var(--g)' },
-              { l: 'Unsold', v: roomState.unsoldLog.length, c: 'var(--re)' },
-              { l: 'Total Spent', v: `₹${roomState.participants.reduce((a, b) => a + b.spent, 0)}L`, c: 'var(--or)' },
-              { l: 'Avg Sale', v: roomState.soldLog.length ? `₹${Math.round(roomState.soldLog.reduce((a, b) => a + b.price, 0) / roomState.soldLog.length)}L` : '—', c: 'var(--bl)' },
+              { l: 'Players Sold', v: safeSoldLog.length, c: 'var(--g)' },
+              { l: 'Unsold', v: safeUnsoldLog.length, c: 'var(--re)' },
+              { l: 'Total Spent', v: `₹${safeParticipants.reduce((a, b) => a + b.spent, 0)}L`, c: 'var(--or)' },
+              { l: 'Avg Sale', v: safeSoldLog.length ? `₹${Math.round(safeSoldLog.reduce((a, b) => a + b.price, 0) / safeSoldLog.length)}L` : '—', c: 'var(--bl)' },
             ].map((s) => (
               <div key={s.l} className="card" style={{ textAlign: 'center', padding: 13 }}>
                 <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3 }}>{s.l}</div>
@@ -1097,10 +981,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             ))}
           </div>
 
-          {/* Winner Banner */}
           {roomState.phase === 'done' && (() => {
-            const ranked = [...roomState.participants].sort((a, b) => {
-              if (b.squad.length !== a.squad.length) return b.squad.length - a.squad.length;
+            const ranked = [...safeParticipants].sort((a, b) => {
+              const aLen = (a.squad || []).length;
+              const bLen = (b.squad || []).length;
+              if (bLen !== aLen) return bLen - aLen;
               return (b.budget - b.spent) - (a.budget - a.spent);
             });
             const winner = ranked[0];
@@ -1121,7 +1006,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 14 }}>
                   <div>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Players</div>
-                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--bl)' }}>{winner.squad.length}</div>
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--bl)' }}>{(winner.squad || []).length}</div>
                   </div>
                   <div>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Spent</div>
@@ -1139,7 +1024,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                         <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: 'var(--t3)' }}>{i === 0 ? '🥈' : i === 1 ? '🥉' : `#${i + 2}`}</span>
                         <Avatar name={t.name} size={22} color={t.color} photo={t.photo} />
                         <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, color: t.color }}>{t.name}</span>
-                        <span style={{ color: 'var(--t3)' }}>({t.squad.length} players)</span>
+                        <span style={{ color: 'var(--t3)' }}>({(t.squad || []).length} players)</span>
                       </div>
                     ))}
                   </div>
@@ -1148,20 +1033,20 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             );
           })()}
 
-          <div className="two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div className="card" style={{ padding: 18 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Budget Spending</div>
               <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, background: 'var(--g)', borderRadius: 2, display: 'inline-block' }} /> Spent</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, background: 'var(--bd2)', borderRadius: 2, display: 'inline-block' }} /> Remaining</span>
               </div>
-              <BarChart data={roomState.participants.map((p) => ({ name: p.name, spent: p.spent, remaining: p.budget - p.spent }))} />
+              <BarChart data={safeParticipants.map((p) => ({ name: p.name, spent: p.spent, remaining: p.budget - p.spent }))} />
             </div>
             <div className="card" style={{ padding: 18 }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Spend Distribution</div>
-              <DonutChart data={roomState.participants.filter((p) => p.spent > 0).map((p) => ({ name: p.name, value: p.spent, color: p.color }))} />
+              <DonutChart data={safeParticipants.filter((p) => p.spent > 0).map((p) => ({ name: p.name, value: p.spent, color: p.color }))} />
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                {roomState.participants.filter((p) => p.spent > 0).map((p) => (
+                {safeParticipants.filter((p) => p.spent > 0).map((p) => (
                   <span key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--t2)' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
                     {p.name}
@@ -1174,10 +1059,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           <div className="card" style={{ padding: 18 }}>
             <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 12 }}>💰 Top 5 Most Expensive</div>
             {(() => {
-              const sorted = [...roomState.soldLog].sort((a, b) => b.price - a.price).slice(0, 5);
+              const sorted = [...safeSoldLog].sort((a, b) => b.price - a.price).slice(0, 5);
               if (sorted.length === 0) return <div style={{ color: 'var(--t3)', textAlign: 'center', padding: 18, fontSize: 13 }}>No players sold yet</div>;
               return sorted.map((s, i) => {
-                const b = roomState.participants.find((p) => p.id === s.buyer);
+                const b = safeParticipants.find((p) => p.id === s.buyer);
                 return (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', borderBottom: i < sorted.length - 1 ? '1px solid var(--bd)' : 'none' }}>
                     <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--t3)', width: 24, textAlign: 'center' }}>{i + 1}</div>
@@ -1195,7 +1080,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         </div>
       )}
 
-      {/* ── LAUNCH COUNTDOWN OVERLAY ── */}
       {launchOverlay !== null && (
         <div style={{
           position: 'fixed',
@@ -1242,9 +1126,9 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           <div key={launchOverlay} className={launchOverlay === 'GO!' ? 'launch-num-go' : 'launch-num'}>
             {launchOverlay}
           </div>
-          {roomState.players && roomState.players[roomState.playerIdx] && (
+          {safePlayers && safePlayers[roomState.playerIdx] && (
             <div style={{ fontSize: 16, letterSpacing: 2, color: 'var(--t3)', textTransform: 'uppercase', marginTop: 20, textAlign: 'center', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
-              First Up: <b style={{ color: '#fff' }}>{roomState.players[roomState.playerIdx].name}</b> ({roomState.players[roomState.playerIdx].role})
+              First Up: <b style={{ color: '#fff' }}>{safePlayers[roomState.playerIdx].name}</b> ({safePlayers[roomState.playerIdx].role})
             </div>
           )}
         </div>
