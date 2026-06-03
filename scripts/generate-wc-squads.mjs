@@ -1,38 +1,38 @@
-// Generates a static WC2026 player dataset from ESPN's public squad rosters.
+// Generates a static WC2026 player dataset from ESPN squads + Transfermarkt
+// market values.
 //
 //   node scripts/generate-wc-squads.mjs
 //
 // Output: src/lib/wcSquads.ts  (export const WC2026_PLAYERS: Player[])
 //
-// Players are real (ESPN rosters). Positions map G/D/M/F -> Goalkeeper /
-// Defender / Midfielder / Forward (ESPN already files wingers under Midfielder
-// and keeps only out-and-out forwards under F). Tier comes from the country's
-// FIFA-ranking band below; base price is derived from tier + position.
+// - Squad membership + position come from ESPN's public WC2026 rosters
+//   (G/D/M/F -> Goalkeeper / Defender / Midfielder / Forward; ESPN files
+//   wingers under Midfielder and keeps only strikers under F).
+// - Each team is capped to its 26 most valuable players (≈ the real squad).
+// - TIER IS PER-PLAYER, by Transfermarkt market value — NOT by country. A
+//   star from a small nation outranks a squad filler from a big one.
 
 import { writeFileSync } from 'node:fs';
 
 const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world';
+const TM = 'https://transfermarkt-api.fly.dev';
 
-// Country -> tier (1 = strongest by FIFA ranking / current form, 5 = lowest).
-// Keyed by ESPN's exact team displayName.
-const TEAM_TIERS = {
-  Argentina: 1, Spain: 1, France: 1, England: 1, Brazil: 1, Portugal: 1,
-  Netherlands: 1, Belgium: 1,
-  Croatia: 2, Morocco: 2, Germany: 2, Colombia: 2, Uruguay: 2, Japan: 2,
-  'United States': 2, Switzerland: 2, Senegal: 2, Mexico: 2,
-  Iran: 3, Australia: 3, Austria: 3, 'South Korea': 3, Ecuador: 3, Canada: 3,
-  Egypt: 3, Norway: 3, 'Ivory Coast': 3, Algeria: 3, Scotland: 3, 'Türkiye': 3,
-  Sweden: 3,
-  Panama: 4, Paraguay: 4, Tunisia: 4, Qatar: 4, 'Saudi Arabia': 4,
-  'South Africa': 4, Czechia: 4, Ghana: 4, Iraq: 4, Jordan: 4, Uzbekistan: 4,
-  'Cape Verde': 5, 'New Zealand': 5, 'Curaçao': 5, Haiti: 5, 'Congo DR': 5,
-  'Bosnia-Herzegovina': 5,
-};
+const SQUAD_CAP = 26;
+const CONCURRENCY = 5;
 
 const POSITION = { G: 'Goalkeeper', D: 'Defender', M: 'Midfielder', F: 'Forward' };
 const POSITION_ORDER = { Goalkeeper: 0, Defender: 1, Midfielder: 2, Forward: 3 };
-const TIER_BASE = { 1: 160, 2: 120, 3: 85, 4: 60, 5: 42 };
 const POSITION_ADJ = { Forward: 15, Midfielder: 8, Defender: 3, Goalkeeper: 0 };
+
+// Market-value bands (EUR) -> tier. Performance proxy, country-agnostic.
+function tierForValue(mv) {
+  if (mv >= 60_000_000) return 1;
+  if (mv >= 30_000_000) return 2;
+  if (mv >= 12_000_000) return 3;
+  if (mv >= 4_000_000) return 4;
+  return 5;
+}
+const TIER_BASE = { 1: 160, 2: 120, 3: 85, 4: 60, 5: 42 };
 
 function initials(name) {
   const parts = name.trim().split(/\s+/);
@@ -40,10 +40,87 @@ function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-async function getJSON(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
-  return res.json();
+// Normalise a country/nationality to a comparable token across ESPN & TM.
+function natKey(s) {
+  const x = (s || '')
+    .normalize('NFD') // split accents into base letter + combining mark
+    .toLowerCase()
+    .replace(/[^a-z]/g, ''); // strips combining marks and punctuation
+  const alias = {
+    unitedstates: 'usa', us: 'usa', usmnt: 'usa',
+    czechrepublic: 'czechia',
+    koreasouth: 'southkorea', republicofkorea: 'southkorea', korearep: 'southkorea',
+    cotedivoire: 'ivorycoast',
+    drcongo: 'congodr', congo: 'congodr', democraticrepublicofcongo: 'congodr',
+    turkey: 'turkiye',
+    bosniaandherzegovina: 'bosniaherzegovina',
+    caboverde: 'capeverde',
+    curacao: 'curacao',
+  };
+  return alias[x] || x;
+}
+
+async function getJSON(url, tries = 4) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, { headers: { accept: 'application/json' } });
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      if (i === tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+    }
+  }
+}
+
+// Best nationality-matched market value from one TM search query.
+async function searchValue(query, want) {
+  let data;
+  try {
+    data = await getJSON(`${TM}/players/search/${encodeURIComponent(query)}`);
+  } catch {
+    return 0;
+  }
+  const results = (data?.results || []).filter((r) => typeof r.marketValue === 'number');
+  if (!results.length) return 0;
+  const natMatch = results.filter((r) => (r.nationalities || []).some((n) => natKey(n) === want));
+  const pool = natMatch.length ? natMatch : results;
+  pool.sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
+  return pool[0].marketValue || 0;
+}
+
+// Transfermarkt market value, disambiguated by nationality. Falls back to a
+// reversed token order (e.g. ESPN "Kim Min-Jae" -> TM "Min-Jae Kim") for
+// family-name-first listings that the direct query misses.
+async function marketValue(name, country) {
+  const want = natKey(country);
+  let mv = await searchValue(name, want);
+  if (mv === 0) {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      const reversed = [...parts].reverse().join(' ');
+      if (reversed !== name) mv = await searchValue(reversed, want);
+    }
+  }
+  return mv;
+}
+
+// Run async mapper over items with bounded concurrency.
+async function mapPool(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: limit }, worker));
+  return out;
 }
 
 async function main() {
@@ -51,17 +128,10 @@ async function main() {
   const teams = (teamsData.sports?.[0]?.leagues?.[0]?.teams || []).map((t) => t.team);
   console.log(`Found ${teams.length} teams`);
 
-  const players = [];
-  let id = 1000;
-
+  // 1. Collect every rostered player (squad membership + position) from ESPN.
+  const raw = [];
   for (const team of teams) {
     const country = team.displayName;
-    const tier = TEAM_TIERS[country];
-    if (!tier) {
-      console.warn(`! No tier mapping for "${country}" — defaulting to 4`);
-    }
-    const tierNum = tier || 4;
-
     let roster;
     try {
       roster = await getJSON(`${ESPN}/teams/${team.id}/roster`);
@@ -69,38 +139,65 @@ async function main() {
       console.warn(`! Roster failed for ${country}: ${e.message}`);
       continue;
     }
-
-    const athletes = roster.athletes || [];
-    let count = 0;
-    for (const a of athletes) {
-      const abbr = a.position?.abbreviation;
-      const role = POSITION[abbr];
+    for (const a of roster.athletes || []) {
+      const role = POSITION[a.position?.abbreviation];
       const name = a.displayName || a.fullName;
-      if (!role || !name) continue; // skip players with no clear position
-      players.push({
-        id: id++,
-        name,
-        country,
-        role,
-        tier: `Tier ${tierNum}`,
-        tierNum,
-        base: TIER_BASE[tierNum] + (POSITION_ADJ[role] || 0),
-        img: initials(name),
-        nat: '', // derived from country at render time via playerFlag()
-      });
-      count++;
+      if (!role || !name) continue;
+      raw.push({ name, country, role });
     }
-    console.log(`  ${country} (T${tierNum}): ${count} players`);
+  }
+  console.log(`Collected ${raw.length} rostered players. Fetching market values…`);
+
+  // 2. Look up Transfermarkt market value for each (bounded concurrency).
+  let done = 0;
+  await mapPool(raw, CONCURRENCY, async (p) => {
+    p.mv = await marketValue(p.name, p.country);
+    if (++done % 100 === 0) console.log(`  …${done}/${raw.length}`);
+  });
+
+  // 3. Cap each team to its 26 most valuable players.
+  const byTeam = new Map();
+  for (const p of raw) {
+    if (!byTeam.has(p.country)) byTeam.set(p.country, []);
+    byTeam.get(p.country).push(p);
+  }
+  const kept = [];
+  for (const [country, list] of byTeam) {
+    list.sort((a, b) => b.mv - a.mv);
+    const top = list.slice(0, SQUAD_CAP);
+    kept.push(...top);
+    const valued = top.filter((p) => p.mv > 0).length;
+    console.log(`  ${country}: kept ${top.length} (with value: ${valued})`);
   }
 
-  // Order: tier 1 -> 5, then GK -> DEF -> MID -> FWD, then country, then name.
+  // 4. Build final players: tier by value, base from tier + position.
+  let id = 1000;
+  const players = kept.map((p) => {
+    const tierNum = tierForValue(p.mv);
+    return {
+      id: id++,
+      name: p.name,
+      country: p.country,
+      role: p.role,
+      tier: `Tier ${tierNum}`,
+      tierNum,
+      mv: p.mv,
+      base: TIER_BASE[tierNum] + (POSITION_ADJ[p.role] || 0),
+      img: initials(p.name),
+    };
+  });
+
+  // 5. Order: tier 1 -> 5, then GK -> FWD, then most valuable first, then name.
   players.sort(
     (x, y) =>
       x.tierNum - y.tierNum ||
       POSITION_ORDER[x.role] - POSITION_ORDER[y.role] ||
-      x.country.localeCompare(y.country) ||
+      y.mv - x.mv ||
       x.name.localeCompare(y.name)
   );
+
+  const dist = [0, 0, 0, 0, 0, 0];
+  players.forEach((p) => dist[p.tierNum]++);
 
   const rows = players
     .map(
@@ -109,9 +206,9 @@ async function main() {
     )
     .join('\n');
 
-  const header = `// AUTO-GENERATED by scripts/generate-wc-squads.mjs — do not edit by hand.\n// Source: ESPN public WC2026 rosters. ${players.length} players across ${teams.length} teams.\nimport type { Player } from './types';\n\nexport const WC2026_PLAYERS: Player[] = [\n`;
+  const header = `// AUTO-GENERATED by scripts/generate-wc-squads.mjs — do not edit by hand.\n// Source: ESPN WC2026 rosters (squad + position) + Transfermarkt market values.\n// ${players.length} players (max ${SQUAD_CAP}/team). Tier is per-player by market\n// value: T1 ${dist[1]}, T2 ${dist[2]}, T3 ${dist[3]}, T4 ${dist[4]}, T5 ${dist[5]}.\nimport type { Player } from './types';\n\nexport const WC2026_PLAYERS: Player[] = [\n`;
   writeFileSync('src/lib/wcSquads.ts', header + rows + '\n];\n');
-  console.log(`\nWrote src/lib/wcSquads.ts with ${players.length} players.`);
+  console.log(`\nWrote src/lib/wcSquads.ts with ${players.length} players. Tier spread: T1=${dist[1]} T2=${dist[2]} T3=${dist[3]} T4=${dist[4]} T5=${dist[5]}`);
 }
 
 main().catch((e) => {
