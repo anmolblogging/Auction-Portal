@@ -9,7 +9,8 @@ import BarChart from '@/components/charts/BarChart';
 import DonutChart from '@/components/charts/DonutChart';
 import Spinner from '@/components/ui/Spinner';
 import { ServerRoom } from '@/lib/db';
-import { supabase } from '@/lib/supabase';
+import { ref, onValue, off } from "firebase/database";
+import { database } from "@/lib/firebase";
 import { playBidSound, playCountdownSound, playSoldSound } from '@/lib/sounds';
 
 const BID_TIMER_SECONDS = 30;
@@ -106,64 +107,24 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     URL.revokeObjectURL(url);
   };
 
-useEffect(() => {
+// Firebase Realtime Listener (0ms delay)
+  useEffect(() => {
     let active = true;
+    const roomRef = ref(database, `rooms/${roomId.toUpperCase()}`);
 
-    async function fetchState() {
-      try {
-        const res = await fetch(`/api/rooms/${roomId}?t=${Date.now()}`, { cache: 'no-store' });
-        
-        if (res.status === 404) {
-          if (active) setNotFound(true);
-          return;
-        }
-        
-        // If the server is busy/rebooting, exit quietly to prevent red error screens
-        if (!res.ok) return; 
-
-        const data = await res.json();
-        if (data.error) return; 
-        
-        if (active) { 
-          setNotFound(false); 
-          setRoomState(data.room); 
-        }
-      } catch (err) {
-        // Silently swallow "Failed to fetch" network errors when the server blips
+    const unsubscribe = onValue(roomRef, (snapshot) => {
+      if (!active) return;
+      if (snapshot.exists()) {
+        setRoomState(snapshot.val());
+        setNotFound(false);
+      } else {
+        setNotFound(true);
       }
-    }
-
-    fetchState();
-
-    if (!supabase) {
-      // If no Supabase, poll every 1 second instead of doing nothing
-      const localInterval = setInterval(() => { if (active) fetchState(); }, 1000);
-      return () => { active = false; clearInterval(localInterval); };
-    }
-
-    const channelName = `room-changes-${roomId}`;
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms' }, () => {
-        if (active) fetchState();
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => {
-        if (active) fetchState();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => {
-        if (active) fetchState();
-      })
-      .subscribe();
-
-    // SPEED FIX: Lowered fallback from 3000ms to 1000ms
-    const fallbackInterval = setInterval(() => {
-      if (active) fetchState();
-    }, 1000);
+    });
 
     return () => {
       active = false;
-      clearInterval(fallbackInterval);
-      supabase!.removeChannel(channel);
+      off(roomRef, 'value', unsubscribe);
     };
   }, [roomId]);
 
@@ -406,12 +367,15 @@ useEffect(() => {
     );
   }
 
-  const safeParticipants = roomState.participants || [];
-  const safePlayers = roomState.players || [];
-  const safeChat = roomState.chat || [];
-  const safeBidHistory = roomState.bidHistory || [];
-  const safeSoldLog = roomState.soldLog || [];
-  const safeUnsoldLog = roomState.unsoldLog || [];
+// 🚀 BULLETPROOF ARRAY FIX
+  const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
+  
+  const safeParticipants = toArr(roomState.participants);
+  const safePlayers = toArr(roomState.players);
+  const safeChat = toArr(roomState.chat);
+  const safeBidHistory = toArr(roomState.bidHistory);
+  const safeSoldLog = toArr(roomState.soldLog);
+  const safeUnsoldLog = toArr(roomState.unsoldLog);
 
   if (roomState.phase === 'lobby' || roomState.phase === 'scheduled') {
     const isHost = roomState.hostId === userId;
@@ -560,7 +524,7 @@ useEffect(() => {
   const isEnd = roomState.phase === 'sold' || roomState.phase === 'unsold' || roomState.phase === 'done';
   const isHost = roomState.hostId === userId;
   const canSkip = roomState.phase === 'bidding';
-  const hasPassed = !!roomState.passedBy?.includes(teamId);
+  const hasPassed = toArr(roomState.passedBy).includes(teamId);
   const isHighBidder = roomState.currentBidder === teamId;
 
   const availLeft = (p: { id: string; budget: number; spent: number }) => {
