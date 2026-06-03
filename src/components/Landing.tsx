@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { AuthSession, ManagedUser } from '@/lib/auth';
 import type { AuctionPhase } from '@/lib/types';
 import Avatar from '@/components/ui/Avatar';
+import FixturesBar from '@/components/FixturesBar';
 
 interface RoomHistoryEntry {
   id: string;
@@ -127,24 +128,6 @@ export default function Landing({
   const [settingsMessage, setSettingsMessage] = useState('');
   const [history, setHistory] = useState<RoomHistoryEntry[]>([]);
   const teamPhotoRef = useRef<HTMLInputElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
-  const [news, setNews] = useState<string[]>([
-    '🔴 LIVE: Virat Kohli SOLD ₹260L',
-    'Bumrah going ₹228L',
-    'New IPL 2025 room open',
-    'Rashid Khan SOLD ₹148L'
-  ]);
-
-  useEffect(() => {
-    fetch('/api/news')
-      .then(res => res.json())
-      .then(data => {
-        if (data.headlines && data.headlines.length > 0) {
-          setNews(data.headlines);
-        }
-      })
-      .catch(err => console.error('Failed to load news ticker:', err));
-  }, []);
 
   useEffect(() => {
     if (userId) {
@@ -297,15 +280,7 @@ export default function Landing({
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div 
-        style={{ background: 'var(--g)', overflow: 'hidden', whiteSpace: 'nowrap', padding: '5px 0' }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <span style={{ display: 'inline-block', animation: 'ticker 24s linear infinite', animationPlayState: isHovered ? 'paused' : 'running', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 12, color: '#000', letterSpacing: 1 }}>
-          {news.join(' \u00A0•\u00A0 ')} &nbsp;•&nbsp;
-        </span>
-      </div>
+      <FixturesBar />
 
       <nav
         style={{

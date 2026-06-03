@@ -11,6 +11,7 @@ import Spinner from '@/components/ui/Spinner';
 import { ServerRoom } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { playBidSound, playCountdownSound, playSoldSound } from '@/lib/sounds';
+import { playerFlag } from '@/lib/flags';
 
 const BID_TIMER_SECONDS = 30;
 
@@ -729,7 +730,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
                         <TBadge tier={pl.tier} /><RBadge role={pl.role} />
-                        <span style={{ fontSize: 13 }}>{pl.nat || '🌍'}</span>
+                        <span style={{ fontSize: 13 }}>{playerFlag(pl)}</span>
                       </div>
                       <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>{pl.name}</div>
                       <div style={{ color: 'var(--t2)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", marginTop: 2 }}>{pl.country}</div>
@@ -878,7 +879,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                                     <span style={{ opacity: 0.5, fontSize: 10 }}>#{roomState.playerIdx + 2 + idx}</span>
                                     <span style={{ fontWeight: 600, color: 'var(--t1)', textTransform: 'uppercase' }}>{p.name}</span>
                                     <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--bg3)', borderRadius: 4 }}>{p.role}</span>
-                                    {p.country && <span style={{ fontSize: 10, color: 'var(--t3)' }}>{p.nat || '🌍'} {p.country}</span>}
+                                    {p.country && <span style={{ fontSize: 10, color: 'var(--t3)' }}>{playerFlag(p)} {p.country}</span>}
                                   </span>
                                   <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, letterSpacing: 0.5, color: 'var(--t3)' }}>₹{p.base}L</span>
                                 </div>
@@ -986,7 +987,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}><RBadge role={p.role} /><TBadge tier={p.tier} /></div>
                   <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, color: 'var(--t1)', marginBottom: 2 }}>{p.name}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{p.nat || '🌍'}{p.country ? ` ${p.country}` : ''}</span>
+                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{playerFlag(p)}{p.country ? ` ${p.country}` : ''}</span>
                     <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--g)', letterSpacing: 1 }}>₹{p.soldPrice}L</span>
                   </div>
                 </div>
@@ -1022,7 +1023,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 2 }}>{p.nat || '🌍'}{p.country ? ` ${p.country}` : ''}</div>
+                          <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 2 }}>{playerFlag(p)}{p.country ? ` ${p.country}` : ''}</div>
                           <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: 'var(--g)' }}>₹{p.soldPrice}L</div>
                         </div>
                       </div>

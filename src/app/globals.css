@@ -22,7 +22,6 @@ body{background:var(--bg);color:var(--t1);font-family:'DM Sans',sans-serif;min-h
 @keyframes urgentR{0%,100%{color:#EF4444}50%{color:#FF9090}}
 @keyframes slideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes ticker{from{transform:translateX(100vw)}to{transform:translateX(-100%)}}
 @keyframes sarSpin{to{transform:rotate(360deg)}}
 
 /* New Premium Animations */

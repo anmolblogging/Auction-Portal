@@ -9,6 +9,7 @@ import {
 import Avatar from '@/components/ui/Avatar';
 import { RBadge, TBadge } from '@/components/ui/Badges';
 import Spinner from '@/components/ui/Spinner';
+import { playerFlag } from '@/lib/flags';
 
 interface CreateRoomProps {
   userId: string;
@@ -448,7 +449,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                     {sRes.map((player, index) => (
                       <div key={`${player.name}-${index}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 12, background: 'var(--bg3)', borderRadius: 8, border: '1px solid var(--bd2)' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)', marginBottom: 5 }}>{player.nat || '🌍'} {player.name}</div>
+                          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)', marginBottom: 5 }}>{playerFlag(player)} {player.name}</div>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
                             <RBadge role={player.role || roleOptions[0]} />
                             <TBadge tier={player.tier || 'Gold'} />
@@ -493,7 +494,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                 <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
                   {players.map((player, index) => (
                     <div key={String(player.id) + index} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 10px', background: 'var(--bg3)', borderRadius: 7, border: '1px solid var(--bd)' }}>
-                      <span style={{ fontSize: 14 }}>{player.nat || '🌍'}</span>
+                      <span style={{ fontSize: 14 }}>{playerFlag(player)}</span>
                       <span style={{ flex: 1, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, fontSize: 13, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.name}</span>
                       <RBadge role={player.role} />
                       <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 14, color: 'var(--g)', letterSpacing: 0.5, margin: '0 4px' }}>₹{player.base}L</span>
