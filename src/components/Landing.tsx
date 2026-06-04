@@ -49,6 +49,7 @@ const FEATURES = [
   ['🏟', 'Multi-Sport', 'IPL, UEFA, FIFA, NBA or any custom tournament'],
 ];
 
+// FIXED: Overlays now use margin auto and overflowY so they don't get cut off on small iPhones
 const overlayStyle: CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -58,8 +59,7 @@ const overlayStyle: CSSProperties = {
   backgroundColor: 'rgba(5,7,14,0.85)',
   backdropFilter: 'blur(8px)',
   display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
+  overflowY: 'auto',
   zIndex: 1000,
   padding: 16,
 };
@@ -67,6 +67,9 @@ const overlayStyle: CSSProperties = {
 const modalStyle: CSSProperties = {
   width: '100%',
   maxWidth: 480,
+  margin: 'auto',
+  background: 'var(--bg)',
+  borderRadius: 16,
   animation: 'fadeUp 0.3s ease',
   border: '1px solid var(--bd2)',
   display: 'flex',
@@ -132,6 +135,7 @@ export default function Landing({
 
   useEffect(() => {
     if (userId) {
+      // SAFARI FIX: Encode URL to prevent SyntaxError
       fetch(`/api/rooms?userId=${encodeURIComponent(userId)}`)
         .then(res => res.json())
         .then(data => {
@@ -142,6 +146,7 @@ export default function Landing({
   }, [userId]);
 
   const isAdmin = authSession?.isAdmin ?? false;
+  
   async function checkRoom() {
     if (!roomCode.trim()) {
       setError('Please enter a room code');
@@ -155,7 +160,9 @@ export default function Landing({
     try {
       const code = roomCode.trim().toUpperCase();
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
-      const res = await fetch(`/api/rooms/${formattedCode}?t=${Date.now()}`, { cache: 'no-store' });
+      
+      // SAFARI FIX: Encode URL to prevent "The string did not match the expected pattern"
+      const res = await fetch(`/api/rooms/${encodeURIComponent(formattedCode)}?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.error) {
         throw new Error(data.error);
@@ -181,7 +188,8 @@ export default function Landing({
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/rooms/${roomDetails.id}`, {
+      // SAFARI FIX: Safe URL encoding for mobile devices
+      const res = await fetch(`/api/rooms/${encodeURIComponent(roomDetails.id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -281,17 +289,24 @@ export default function Landing({
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <nav
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
-          padding: '14px clamp(16px,4vw,40px)',
-          borderBottom: '1px solid var(--bd)',
-        }}
-      >
+      {/* NATIVE MOBILE RESPONSIVE ENGINE */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .landing-body { flex-direction: row; }
+        .landing-sidebar { width: clamp(260px, 25vw, 340px); border-right: 1px solid var(--bd); padding: 24px 20px; overflow-y: auto; background: rgba(0,0,0,0.15); }
+        .nav-container { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px clamp(16px,4vw,40px); border-bottom: 1px solid var(--bd); }
+        .nav-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+        
+        @media (max-width: 800px) {
+          .landing-body { flex-direction: column !important; }
+          .landing-sidebar { width: 100% !important; border-right: none !important; border-top: 1px solid var(--bd); height: auto; }
+          .hero-title { font-size: clamp(60px, 15vw, 90px) !important; }
+          .nav-actions { justify-content: center !important; width: 100%; margin-top: 8px; }
+          .modal-content { padding: 16px !important; }
+          .stat-blocks { margin-top: 24px !important; gap: 16px !important; }
+        }
+      `}} />
+
+      <nav className="nav-container">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)', letterSpacing: 3 }}>SAR</span>
           {authSession && (
@@ -307,7 +322,7 @@ export default function Landing({
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="nav-actions">
           <button className="btn bs bsm" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
           <button className="btn bs bsm" onClick={() => setShowJoin(true)}>Join Room</button>
           {authSession ? (
@@ -324,10 +339,10 @@ export default function Landing({
         </div>
       </nav>
 
-      <div className="landing-body" style={{ flex: 1, display: 'flex', flexDirection: 'row', width: '100%', alignItems: 'stretch' }}>
+      <div className="landing-body" style={{ flex: 1, display: 'flex', width: '100%', alignItems: 'stretch' }}>
         {/* ROOM HISTORY SIDEBAR */}
         {userId && history.length > 0 && (
-          <div style={{ width: 'clamp(260px, 25vw, 340px)', borderRight: '1px solid var(--bd)', padding: '24px 20px', overflowY: 'auto', background: 'rgba(0,0,0,0.15)' }}>
+          <div className="landing-sidebar">
             <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2, color: 'var(--t1)', marginBottom: 16 }}>Your Recent Rooms</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {history.map((room) => (
@@ -355,7 +370,7 @@ export default function Landing({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px clamp(16px,4vw,40px) 36px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,220,114,.045) 0%,transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1, width: '100%' }}>
-          <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(54px,9vw,108px)', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
+          <h1 className="hero-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '108px', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
             SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
           </h1>
           <p style={{ color: 'var(--t2)', fontSize: 17, maxWidth: 430, margin: '18px auto 32px', lineHeight: 1.65, fontWeight: 300 }}>
@@ -367,7 +382,7 @@ export default function Landing({
             </button>
             <button className="btn bs" onClick={() => setShowJoin(true)} style={{ fontSize: 17, padding: '13px 34px' }}>Join a Room</button>
           </div>
-          <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
+          <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
             {[{ v: '2,400+', l: 'Auctions' }, { v: '18K+', l: 'Players Sold' }, { v: '4.9★', l: 'Rating' }].map((s) => (
               <div key={s.l} style={{ textAlign: 'center', minWidth: 90 }}>
                 <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>{s.v}</div>
@@ -410,7 +425,7 @@ export default function Landing({
 
       {showJoin && (
         <div style={overlayStyle}>
-          <div className="card" style={modalStyle}>
+          <div className="card modal-content" style={modalStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>JOIN AUCTION ROOM</h3>
               <button onClick={handleCloseJoin} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
@@ -426,7 +441,7 @@ export default function Landing({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <Label>Room Code</Label>
-                  <input className="inp" placeholder="e.g. 7291 or AUC-7291" value={roomCode} onChange={(e) => setRoomCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') checkRoom(); }} />
+                  <input className="inp" placeholder="e.g. 7291 or AUC-7291" value={roomCode} onChange={(e) => setRoomCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') checkRoom(); }} style={{ fontSize: '16px' }} />
                 </div>
                 <button className="btn bp" onClick={checkRoom} disabled={loading} style={{ width: '100%', padding: 12 }}>
                   {loading ? 'Finding...' : 'Find Room →'}
@@ -461,15 +476,15 @@ export default function Landing({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <Label>Your Name / Alias</Label>
-                  <input className="inp" placeholder="Enter your name" value={userName} onChange={(e) => setUserName(e.target.value)} />
+                  <input className="inp" placeholder="Enter your name" value={userName} onChange={(e) => setUserName(e.target.value)} style={{ fontSize: '16px' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <Label>Your Team Name</Label>
-                  <input className="inp" placeholder="Enter your team name" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
+                  <input className="inp" placeholder="Enter your team name" value={teamName} onChange={(e) => setTeamName(e.target.value)} style={{ fontSize: '16px' }} />
                 </div>
 
-                <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                   <div style={{ cursor: 'pointer' }} onClick={() => teamPhotoRef.current?.click()}>
                     <Avatar name={teamName || 'Team'} size={60} color="var(--g)" photo={teamPhoto} />
                   </div>
@@ -506,9 +521,9 @@ export default function Landing({
                   />
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                  <button className="btn bs" onClick={() => { setRoomDetails(null); setTeamName(''); setTeamPhoto(null); }} style={{ flex: 1 }}>Back</button>
-                  <button className="btn bp" onClick={submitJoin} disabled={loading || !userName || !teamName} style={{ flex: 2 }}>
+                <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                  <button className="btn bs" onClick={() => { setRoomDetails(null); setTeamName(''); setTeamPhoto(null); }} style={{ flex: 1, minWidth: 100 }}>Back</button>
+                  <button className="btn bp" onClick={submitJoin} disabled={loading || !userName || !teamName} style={{ flex: 2, minWidth: 180 }}>
                     {loading ? 'Joining...' : 'Join Auction →'}
                   </button>
                 </div>
@@ -520,7 +535,7 @@ export default function Landing({
 
       {showLogin && (
         <div style={overlayStyle}>
-          <div className="card" style={modalStyle}>
+          <div className="card modal-content" style={modalStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>LOGIN</h3>
@@ -546,6 +561,7 @@ export default function Landing({
                   value={loginForm.userId}
                   onChange={(e) => setLoginForm((prev) => ({ ...prev, userId: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -557,6 +573,7 @@ export default function Landing({
                   value={loginForm.password}
                   onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
@@ -570,7 +587,7 @@ export default function Landing({
 
       {showSettings && isAdmin && (
         <div style={overlayStyle}>
-          <div className="card" style={{ ...modalStyle, maxWidth: 760, maxHeight: '85vh', overflowY: 'auto' }}>
+          <div className="card modal-content" style={{ ...modalStyle, maxWidth: 760 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <div>
                 <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, letterSpacing: 2 }}>USER SETTINGS</h3>
@@ -592,6 +609,7 @@ export default function Landing({
                       placeholder="e.g. auctionhost01"
                       value={settingsForm.userId}
                       onChange={(e) => setSettingsForm((prev) => ({ ...prev, userId: e.target.value }))}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -603,6 +621,7 @@ export default function Landing({
                       value={settingsForm.password}
                       onChange={(e) => setSettingsForm((prev) => ({ ...prev, password: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') submitManagedUser(); }}
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <button className="btn bp" onClick={submitManagedUser}>Create User</button>
