@@ -21,7 +21,6 @@ export async function POST(
     const room = await getRoom(roomId);
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
-    // 🚀 THE BANKER FIX: Auto-patch broken rooms before trying to bid
     room.participants = toArr(room.participants).map((p: any) => ({
       ...p,
       budget: p.budget || room.budget || 10000,
@@ -59,13 +58,12 @@ export async function POST(
         const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
         
-        if (team.ownerId !== null && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
+        // 🚀 FIREBASE FIX: Safely allow bots (missing ownerId) to bid
+        if (team.ownerId && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: 'You are already the highest bidder' }, { status: 400 });
         if (room.passedBy.includes(bidder)) return NextResponse.json({ error: 'You passed on this player and can no longer bid' }, { status: 400 });
 
         const nextBidVal = (room.currentBid || 0) + amount;
-        
-        // This is what was silently crashing! Now it is completely safe.
         if (team.spent + nextBidVal > team.budget) return NextResponse.json({ error: 'Insufficient budget' }, { status: 400 });
 
         room.currentBid = nextBidVal;
@@ -105,7 +103,9 @@ export async function POST(
 
         const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-        if (team.ownerId !== null && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
+        
+        // 🚀 FIREBASE FIX
+        if (team.ownerId && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: "You're the highest bidder — you can't pass" }, { status: 400 });
 
         if (!room.passedBy.includes(bidder)) {

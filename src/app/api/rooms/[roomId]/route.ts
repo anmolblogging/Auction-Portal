@@ -16,7 +16,6 @@ export async function GET(
     
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
-    // 🚀 THE BANKER FIX: Auto-patch current broken rooms
     room.participants = toArr(room.participants).map((p: any) => ({
       ...p,
       budget: p.budget || room.budget || 10000,
@@ -116,7 +115,9 @@ export async function POST(
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     
     room.participants = toArr(room.participants);
-    const openSlot = room.participants.find((p: any) => p.ownerId === null);
+    
+    // 🚀 FIREBASE FIX: Accept empty or undefined properties instead of strict nulls
+    const openSlot = room.participants.find((p: any) => !p.ownerId);
     
     if (!openSlot) return NextResponse.json({ error: 'Room is full! No open slots left.' }, { status: 400 });
 

@@ -32,7 +32,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'analytics', label: '📊 Analytics' },
 ];
 
-// 🚀 BULLETPROOF ARRAY FIX
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
 
 export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave }: AuctionRoomProps) {
@@ -92,7 +91,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     URL.revokeObjectURL(url);
   };
 
-  // Firebase Realtime Listener
   useEffect(() => {
     let active = true;
     const roomRef = ref(database, `rooms/${roomId.toUpperCase()}`);
@@ -181,19 +179,20 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     lastPhaseRef.current = roomState.phase;
   }, [roomState?.phase]);
 
-  // 🤖 THE CPU BOT BRAIN (THIS WAS MISSING!)
+  // 🤖 THE CPU BOT BRAIN (FIREBASE COMPATIBLE)
   useEffect(() => {
     if (!roomState || !roomState.enableBots || roomState.phase !== 'bidding') return;
-    if (roomState.hostId !== userId) return; // Only host device runs bot logic
+    if (roomState.hostId !== userId) return; 
 
-    const bots = toArr(roomState.participants).filter((p: any) => p.ownerId === null);
+    // 🚀 FIREBASE FIX: Safely check for missing ownerIds instead of strict nulls
+    const bots = toArr(roomState.participants).filter((p: any) => !p.ownerId);
     if (bots.length === 0) return;
 
     const botTimer = setTimeout(() => {
       const bot = bots[Math.floor(Math.random() * bots.length)];
       
       if (roomState.currentBidder === bot.id) return;
-      if (roomState.currentBid >= 150) return; // Prevent bots from overbidding
+      if (roomState.currentBid >= 150) return; 
       
       const nextBid = roomState.currentBid + 10;
       if ((bot.spent || 0) + nextBid <= (bot.budget || 0)) {
@@ -203,7 +202,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           body: JSON.stringify({ action: { type: 'BID', bidder: bot.id, amount: 10 }, userId }),
         }).catch(() => {});
       }
-    }, Math.floor(Math.random() * 3000) + 2000); // Bots wait 2-5 seconds
+    }, Math.floor(Math.random() * 3000) + 2000);
 
     return () => clearTimeout(botTimer);
   }, [roomState?.currentBid, roomState?.phase]);
@@ -361,7 +360,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     const isHost = roomState.hostId === userId;
     const isScheduled = roomState.phase === 'scheduled';
     const totalTeams = safeParticipants.length;
-    const joinedTeams = safeParticipants.filter((p) => p.ownerId !== null).length;
+    
+    // 🚀 FIREBASE FIX: Safely check for existing ownerIds to calculate joined teams
+    const joinedTeams = safeParticipants.filter((p) => !!p.ownerId).length;
+    
     const allTeamsJoined = roomState.enableBots ? (joinedTeams >= 1) : (joinedTeams === totalTeams);
 
     return (
