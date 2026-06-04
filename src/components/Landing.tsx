@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState, useEffect } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
+import Image from 'next/image'; // <--- Next.js Image Component Imported
 import type { AuthSession, ManagedUser } from '@/lib/auth';
 import type { AuctionPhase } from '@/lib/types';
 import Avatar from '@/components/ui/Avatar';
@@ -136,11 +137,15 @@ export default function Landing({
     if (userId) {
       const safeId = userId.replace(/[^a-zA-Z0-9_-]/g, '');
       fetch(`/api/rooms?userId=${safeId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.history) setHistory(data.history);
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const text = await res.text();
+          return text ? JSON.parse(text) : {};
         })
-        .catch(err => console.error(err));
+        .then(data => {
+          if (data && data.history) setHistory(data.history);
+        })
+        .catch(err => console.error("Failed to fetch room history:", err));
     }
   }, [userId]);
 
@@ -320,7 +325,14 @@ export default function Landing({
 
       <nav className="nav-container">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <img src="/kola.png" alt="KOLA" style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} />
+          <Image 
+            src="/kolacommunications.svg" 
+            alt="Kola Communications Logo" 
+            width={120} 
+            height={32} 
+            style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} 
+            priority 
+          />
           {authSession && (
             <span
               className="tag"

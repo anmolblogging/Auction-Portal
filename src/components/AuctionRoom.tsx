@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react/no-unescaped-entities */
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image'; // <--- Next.js Image Component Imported
 import { Player } from '@/lib/types';
 import { ROLE_COLORS } from '@/lib/data';
 import Avatar from '@/components/ui/Avatar';
@@ -368,7 +369,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
         <div className="header-bar-lobby" style={{ padding: '13px 36px', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--g)', letterSpacing: 2 }}>SAR</span>
+            <Image 
+              src="/kolacommunications.svg" 
+              alt="Kola Communications Logo" 
+              width={80} 
+              height={24} 
+              style={{ height: 24, width: 'auto', objectFit: 'contain' }} 
+              priority 
+            />
             <span style={{ color: 'var(--t3)' }}>/</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, color: 'var(--t2)' }}>Lobby - {roomState.name}</span>
           </div>
@@ -545,7 +553,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
       <div className="header-bar-main">
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--g)', letterSpacing: 2 }}>SAR</span>
+          <Image 
+            src="/kolacommunications.svg" 
+            alt="Kola Communications Logo" 
+            width={80} 
+            height={22} 
+            style={{ height: 22, width: 'auto', objectFit: 'contain' }} 
+            priority 
+          />
           <span className="hide-mobile" style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 6 }}>Code: {roomState.id}</span>
         </div>
         <div className="header-tabs">

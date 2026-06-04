@@ -11,6 +11,52 @@ import { RBadge, TBadge } from '@/components/ui/Badges';
 import Spinner from '@/components/ui/Spinner';
 import { playerFlag } from '@/lib/flags';
 
+// --- FRONTEND HYBRID RULE ENFORCER ---
+function calculateHybridTier(player: any): number {
+  const team = (player.country || player.nationality || '').toLowerCase().trim();
+  const position = (player.role || player.position || '').toLowerCase().trim();
+  const mvTier = typeof player.tier === 'string' ? parseInt(player.tier.replace(/\D/g, '')) || 5 : (player.tier || 5);
+
+  const tier1Teams = ['argentina', 'france', 'england', 'brazil', 'spain', 'germany', 'portugal'];
+  const tier2Teams = ['netherlands', 'italy', 'belgium', 'uruguay', 'croatia', 'morocco', 'colombia'];
+
+  let teamFactor = 3;
+  if (tier1Teams.includes(team)) teamFactor = 1;
+  else if (tier2Teams.includes(team)) teamFactor = 2;
+
+  const isAttacker = position.includes('forward') || position.includes('st') || position.includes('winger') || position.includes('attack');
+  const isMidfielder = position.includes('midfield') || position.includes('cam') || position.includes('cm');
+
+  const isMarquee = mvTier === 1;
+  const isElite = mvTier === 2;
+
+  if (teamFactor === 1 && (isAttacker || isMarquee)) return 1;
+  if ((teamFactor === 1 && (isMidfielder || isElite)) || (teamFactor === 2 && (isAttacker || isMarquee))) return 2;
+  if (teamFactor <= 2 || (teamFactor === 3 && (isAttacker || isMarquee)) || (teamFactor === 1 && position.includes('def'))) return 3;
+  if (teamFactor === 3 || position.includes('def') || position.includes('goalkeeper') || position.includes('gk')) return 4;
+  return 5;
+}
+
+// Maps players dynamically for UI preview
+function applySportRules(sport: string, rawPlayers: Player[]): Player[] {
+  if (sport.toLowerCase().includes('football') || sport.toLowerCase().includes('fifa')) {
+    return rawPlayers.map(p => {
+      const tierNum = calculateHybridTier(p);
+      let newBase = 20;
+      if (tierNum === 1) newBase = 200;
+      if (tierNum === 2) newBase = 150;
+      if (tierNum === 3) newBase = 100;
+      if (tierNum === 4) newBase = 50;
+      if (tierNum === 5) newBase = 20;
+      
+      // Update UI explicitly so badges and numbers show correctly
+      return { ...p, tier: `Tier ${tierNum}`, base: newBase };
+    });
+  }
+  return rawPlayers;
+}
+// ------------------------------------
+
 interface CreateRoomProps {
   userId: string;
   onLaunch: (roomId: string, teamId: string, userName: string) => void;
@@ -83,13 +129,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps) {
   const [step, setStep] = useState(1);
   const [roomId] = useState(() => `AUC-${Math.floor(1000 + Math.random() * 9000)}`);
-  // Use state for 'now' so it's only set client-side, preventing SSR hydration mismatch.
-  // Reading Date.now() must be deferred to a post-hydration effect, so this setState is intentional.
+  
   const [clientNow, setClientNow] = useState<number | null>(null);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only value, deferred past hydration
+    // eslint-disable-next-line react-hooks/set-state-in-effect 
     setClientNow(Date.now());
   }, []);
+  
   const [cfg, setCfg] = useState<RoomConfig & { enableBots: boolean }>({
     name: 'IPL Fantasy 2025',
     sport: 'Cricket / IPL',
@@ -99,7 +145,10 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
     squadSize: 11,
     enableBots: true,
   });
-  const [players, setPlayers] = useState<Player[]>(() => getPlayersForSport('Cricket / IPL'));
+
+  // Automatically enforce sport formatting on default render
+  const [players, setPlayers] = useState<Player[]>(() => applySportRules('Cricket / IPL', getPlayersForSport('Cricket / IPL')));
+  
   const [hostTeamName, setHostTeamName] = useState('Your Team');
   const [hostTeamPhoto, setHostTeamPhoto] = useState<string | null>(null);
 
@@ -146,7 +195,10 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
       sport,
       tournament: getDefaultTournament(sport),
     }));
-    setPlayers(getPlayersForSport(sport));
+    
+    // Automatically enforce sport formatting when switching dropdown options
+    setPlayers(applySportRules(sport, getPlayersForSport(sport)));
+    
     setSRes([]);
     setSErr('');
     setShowManualForm(false);
@@ -184,13 +236,14 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
   }
 
   function addResult(player: Player) {
-    setPlayers((prev) => [...prev, { ...player, id: Date.now() + Math.random() }]);
+    // Re-format array to assign dynamic prices safely when adding
+    setPlayers((prev) => applySportRules(cfg.sport, [...prev, { ...player, id: Date.now() + Math.random() }]));
     setSRes((results) => results.filter((item) => item.name !== player.name));
   }
 
   function saveManualPlayer() {
     if (!manualP.name.trim()) return;
-    setPlayers((prev) => [
+    setPlayers((prev) => applySportRules(cfg.sport, [
       ...prev,
       {
         id: Date.now(),
@@ -198,11 +251,11 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
         role: manualP.role,
         country: manualP.country,
         nat: '🌍',
-        tier: 'Gold',
+        tier: 'Tier 5',
         base: manualP.base,
         img: makeInitials(manualP.name),
       },
-    ]);
+    ]));
     setShowManualForm(false);
     setManualP({
       name: '',
@@ -236,7 +289,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
         }))
         .filter((player) => player.name);
 
-      setPlayers((prev) => [...prev, ...parsedPlayers]);
+      setPlayers((prev) => applySportRules(cfg.sport, [...prev, ...parsedPlayers]));
       setFMsg(`✅ Added ${parsedPlayers.length} players from Excel`);
     } catch (e: unknown) {
       setFMsg(`❌ ${e instanceof Error ? e.message : 'Error reading file'}`);
@@ -263,7 +316,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
       });
       const data = await response.json();
       if (data.error) throw new Error(data.error);
-      setPlayers((prev) => [...prev, ...data.players]);
+      setPlayers((prev) => applySportRules(cfg.sport, [...prev, ...data.players]));
       setFMsg(`✅ Added ${data.players.length} players from PDF`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error';
