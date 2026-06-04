@@ -2,8 +2,13 @@
 import { NextResponse } from 'next/server';
 import { getRoom, saveRoom } from '@/lib/db';
 
+// 🚀 THE VERCEL CACHE KILLERS
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 const BID_TIMER_MS = 30000;
-const TRANSITION_DELAY_MS = 1500;
+const TRANSITION_DELAY_MS = 2500; // Gives everyone 2.5 seconds to see the SOLD/UNSOLD screen
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
 
 export async function GET(
@@ -11,6 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
+    const _url = new URL(req.url); // Forces Next.js to realize this endpoint is dynamic
     const { roomId } = await params;
     const room = await getRoom(roomId);
     
@@ -20,7 +26,7 @@ export async function GET(
       ...p,
       budget: p.budget || room.budget || 10000,
       spent: p.spent || 0,
-      squad: p.squad || []
+      squad: toArr(p.squad)
     }));
 
     room.players = toArr(room.players);
@@ -33,7 +39,8 @@ export async function GET(
     const now = Date.now();
     let updated = false;
 
-    if (room.endsAt && (now + 2500) >= room.endsAt) {
+    // Proceed cleanly once the timer has reached zero
+    if (room.endsAt && now >= room.endsAt) {
       if (room.phase === 'bidding') {
         const pl = room.players[room.playerIdx];
         
@@ -43,7 +50,6 @@ export async function GET(
           
           const win = room.participants.find((p: any) => p.id === room.currentBidder);
           if (win) {
-            win.squad = toArr(win.squad);
             win.squad.push({ ...pl, soldPrice: room.currentBid || 0 });
             win.spent = (win.spent || 0) + (room.currentBid || 0); 
           }
@@ -115,8 +121,6 @@ export async function POST(
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     
     room.participants = toArr(room.participants);
-    
-    // 🚀 FIREBASE FIX: Accept empty or undefined properties instead of strict nulls
     const openSlot = room.participants.find((p: any) => !p.ownerId);
     
     if (!openSlot) return NextResponse.json({ error: 'Room is full! No open slots left.' }, { status: 400 });
