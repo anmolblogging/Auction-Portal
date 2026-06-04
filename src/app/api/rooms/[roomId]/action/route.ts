@@ -25,17 +25,68 @@ export async function POST(
       ...p,
       budget: p.budget || room.budget || 10000,
       spent: p.spent || 0,
-      squad: p.squad || []
+      squad: toArr(p.squad)
     }));
     
     room.players = toArr(room.players);
     room.chat = toArr(room.chat);
     room.bidHistory = toArr(room.bidHistory);
     room.passedBy = toArr(room.passedBy);
+    room.soldLog = toArr(room.soldLog);
+    room.unsoldLog = toArr(room.unsoldLog);
 
     const now = Date.now();
 
     switch (action.type) {
+      // 🚀 THE NEW GAME LOOP ENGINE
+      case 'ADVANCE': {
+        // Prevent premature advancing with a 2-second drift allowance
+        if (!room.endsAt || now < (room.endsAt - 2000)) break; 
+
+        let updated = false;
+
+        if (room.phase === 'bidding') {
+          const pl = room.players[room.playerIdx];
+          if (room.currentBidder) {
+            room.phase = 'sold';
+            room.endsAt = now + 2500;
+            const win = room.participants.find((p: any) => p.id === room.currentBidder);
+            if (win) {
+              win.squad.push({ ...pl, soldPrice: room.currentBid || 0 });
+              win.spent = (win.spent || 0) + (room.currentBid || 0); 
+            }
+            room.soldLog.push({ player: pl, price: room.currentBid || 0, buyer: room.currentBidder });
+            room.chat.push({ id: now, user: 'System', msg: `🔨 SOLD! ${pl?.name || 'Player'} for ₹${room.currentBid}L.` });
+          } else {
+            room.phase = 'unsold';
+            room.endsAt = now + 2500;
+            room.unsoldLog.push(pl);
+            room.chat.push({ id: now, user: 'System', msg: `❌ UNSOLD: ${pl?.name || 'Player'}. No bids.` });
+          }
+          room.chat = room.chat.slice(-60);
+          updated = true;
+        } 
+        else if (room.phase === 'sold' || room.phase === 'unsold') {
+          room.playerIdx++;
+          if (room.playerIdx >= room.players.length) {
+            room.phase = 'done';
+            room.endsAt = null;
+            room.chat.push({ id: now, user: 'System', msg: `🏆 Auction has concluded!` });
+            room.chat = room.chat.slice(-60);
+          } else {
+            room.phase = 'bidding';
+            room.currentBid = room.players[room.playerIdx]?.base || 50; 
+            room.currentBidder = null;
+            room.passedBy = [];
+            room.endsAt = now + BID_TIMER_MS;
+          }
+          updated = true;
+        }
+
+        if (updated) await saveRoom(room, { skipPlayers: true });
+        break;
+      }
+
       case 'START': {
         if (room.hostId !== userId) return NextResponse.json({ error: 'Only the host can start the auction' }, { status: 403 });
         if (room.phase !== 'lobby' && room.phase !== 'scheduled') return NextResponse.json({ error: 'Auction has already started' }, { status: 400 });
@@ -58,7 +109,6 @@ export async function POST(
         const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
         
-        // 🚀 FIREBASE FIX: Safely allow bots (missing ownerId) to bid
         if (team.ownerId && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: 'You are already the highest bidder' }, { status: 400 });
         if (room.passedBy.includes(bidder)) return NextResponse.json({ error: 'You passed on this player and can no longer bid' }, { status: 400 });
@@ -104,7 +154,6 @@ export async function POST(
         const team = room.participants.find((p: any) => p.id === bidder);
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
         
-        // 🚀 FIREBASE FIX
         if (team.ownerId && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: "You're the highest bidder — you can't pass" }, { status: 400 });
 
