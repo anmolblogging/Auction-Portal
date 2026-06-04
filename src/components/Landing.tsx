@@ -49,7 +49,6 @@ const FEATURES = [
   ['🏟', 'Multi-Sport', 'IPL, UEFA, FIFA, NBA or any custom tournament'],
 ];
 
-// FIXED: Overlays now use margin auto and overflowY so they don't get cut off on small iPhones
 const overlayStyle: CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -135,8 +134,8 @@ export default function Landing({
 
   useEffect(() => {
     if (userId) {
-      // SAFARI FIX: Encode URL to prevent SyntaxError
-      fetch(`/api/rooms?userId=${encodeURIComponent(userId)}`)
+      const safeId = userId.replace(/[^a-zA-Z0-9_-]/g, '');
+      fetch(`/api/rooms?userId=${safeId}`)
         .then(res => res.json())
         .then(data => {
           if (data.history) setHistory(data.history);
@@ -158,15 +157,21 @@ export default function Landing({
     setTeamName('');
     setTeamPhoto(null);
     try {
-      const code = roomCode.trim().toUpperCase();
+      // Clean string to prevent Safari Regex/Pattern crashes
+      const code = roomCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
       
-      // SAFARI FIX: Encode URL to prevent "The string did not match the expected pattern"
-      const res = await fetch(`/api/rooms/${encodeURIComponent(formattedCode)}?t=${Date.now()}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
+      const res = await fetch(`/api/rooms/${formattedCode}?t=${Date.now()}`, { cache: 'no-store' });
+      const text = await res.text();
+      let data;
+      
+      try {
+        data = JSON.parse(text);
+      } catch(e) {
+        throw new Error(`Server returned connection error: ${res.status}`);
       }
+
+      if (data.error) throw new Error(data.error);
       setRoomDetails(data.room as JoinRoomDetails);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Room not found');
@@ -188,8 +193,8 @@ export default function Landing({
     setLoading(true);
     setError('');
     try {
-      // SAFARI FIX: Safe URL encoding for mobile devices
-      const res = await fetch(`/api/rooms/${encodeURIComponent(roomDetails.id)}`, {
+      const cleanId = roomDetails.id.replace(/[^a-zA-Z0-9-]/g, '');
+      const res = await fetch(`/api/rooms/${cleanId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,10 +204,17 @@ export default function Landing({
           teamPhoto,
         }),
       });
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
+      
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Vercel connection error (${res.status}). Payload might be too large.`);
       }
+
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to join');
+      
       onJoin(roomDetails.id, data.teamId, userName.trim());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to join');
@@ -289,7 +301,6 @@ export default function Landing({
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* NATIVE MOBILE RESPONSIVE ENGINE */}
       <style dangerouslySetInnerHTML={{__html: `
         .landing-body { flex-direction: row; }
         .landing-sidebar { width: clamp(260px, 25vw, 340px); border-right: 1px solid var(--bd); padding: 24px 20px; overflow-y: auto; background: rgba(0,0,0,0.15); }
@@ -340,7 +351,6 @@ export default function Landing({
       </nav>
 
       <div className="landing-body" style={{ flex: 1, display: 'flex', width: '100%', alignItems: 'stretch' }}>
-        {/* ROOM HISTORY SIDEBAR */}
         {userId && history.length > 0 && (
           <div className="landing-sidebar">
             <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2, color: 'var(--t1)', marginBottom: 16 }}>Your Recent Rooms</h3>
@@ -512,11 +522,35 @@ export default function Landing({
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        setTeamPhoto((event.target?.result as string) || null);
+
+                      // Automatically scale the image down so Vercel does not block the request
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 150; 
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height && width > MAX_SIZE) {
+                          height *= MAX_SIZE / width;
+                          width = MAX_SIZE;
+                        } else if (height > MAX_SIZE) {
+                          width *= MAX_SIZE / height;
+                          height = MAX_SIZE;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          ctx.drawImage(img, 0, 0, width, height);
+                          setTeamPhoto(canvas.toDataURL('image/jpeg', 0.8)); // Output a tiny Base64 JPG!
+                        }
                       };
-                      reader.readAsDataURL(file);
+                      img.onerror = () => {
+                        setError('Failed to process image. Try a different one.');
+                      };
+                      img.src = URL.createObjectURL(file);
                     }}
                   />
                 </div>
