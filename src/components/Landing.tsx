@@ -1,9 +1,10 @@
 'use client';
 import { useRef, useState, useEffect } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import Image from 'next/image'; // <--- Next.js Image Component Imported
+import Image from 'next/image'; 
 import type { AuthSession, ManagedUser } from '@/lib/auth';
 import type { AuctionPhase } from '@/lib/types';
+import { WC2026_PLAYERS } from '@/lib/wcSquads';
 import Avatar from '@/components/ui/Avatar';
 import WorldCupQuiz from '@/components/WorldCupQuiz';
 
@@ -78,6 +79,32 @@ const modalStyle: CSSProperties = {
   padding: 24,
 };
 
+// Unified classification tiers configuration
+function calculateHybridTier(player: any): number {
+  const team = (player.country || player.nationality || '').toLowerCase().trim();
+  const position = (player.role || player.position || '').toLowerCase().trim();
+  const mvTier = typeof player.tier === 'string' ? parseInt(player.tier.replace(/\D/g, '')) || 5 : (player.tier || 5);
+
+  const tier1Teams = ['argentina', 'france', 'england', 'brazil', 'spain', 'germany', 'portugal'];
+  const tier2Teams = ['netherlands', 'italy', 'belgium', 'uruguay', 'croatia', 'morocco', 'colombia'];
+
+  let teamFactor = 3;
+  if (tier1Teams.includes(team)) teamFactor = 1;
+  else if (tier2Teams.includes(team)) teamFactor = 2;
+
+  const isAttacker = position.includes('forward') || position.includes('st') || position.includes('winger') || position.includes('attack');
+  const isMidfielder = position.includes('midfield') || position.includes('cam') || position.includes('cm');
+
+  const isMarquee = mvTier === 1;
+  const isElite = mvTier === 2;
+
+  if (teamFactor === 1 && (isAttacker || isMarquee)) return 1;
+  if ((teamFactor === 1 && (isMidfielder || isElite)) || (teamFactor === 2 && (isAttacker || isMarquee))) return 2;
+  if (teamFactor <= 2 || (teamFactor === 3 && (isAttacker || isMarquee)) || (teamFactor === 1 && position.includes('def'))) return 3;
+  if (teamFactor === 3 || position.includes('def') || position.includes('goalkeeper') || position.includes('gk')) return 4;
+  return 5;
+}
+
 function Label({ children }: { children: ReactNode }) {
   return (
     <label
@@ -115,6 +142,8 @@ export default function Landing({
 }: LandingProps) {
   const [showJoin, setShowJoin] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [showSquads, setShowSquads] = useState(false); 
+  const [selectedTournament, setSelectedTournament] = useState('FIFA World Cup 2026');
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [loginIntent, setLoginIntent] = useState<'nav' | 'host'>('nav');
@@ -132,6 +161,11 @@ export default function Landing({
   const [settingsMessage, setSettingsMessage] = useState('');
   const [history, setHistory] = useState<RoomHistoryEntry[]>([]);
   const teamPhotoRef = useRef<HTMLInputElement>(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPosition, setFilterPosition] = useState('All');
+  const [filterTier, setFilterTier] = useState('All');
+  const [filterCountry, setFilterCountry] = useState('All');
 
   useEffect(() => {
     if (userId) {
@@ -303,6 +337,37 @@ export default function Landing({
     }
   }
 
+  const masterCountriesList = Array.from(new Set(WC2026_PLAYERS.map((p: any) => p.country || p.nationality || 'Unknown'))).sort() as string[];
+
+  const filteredPlayers = WC2026_PLAYERS.filter((player: any) => {
+    const accurateTier = calculateHybridTier(player);
+    const country = player.country || player.nationality || 'Unknown';
+    const position = (player.role || player.position || '').toLowerCase();
+
+    const matchesSearch = !searchQuery.trim() || 
+      player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (player.club && player.club.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    let matchesPosition = true;
+    if (filterPosition !== 'All') {
+      matchesPosition = position.includes(filterPosition.toLowerCase());
+    }
+
+    let matchesTier = true;
+    if (filterTier !== 'All') {
+      matchesTier = accurateTier === parseInt(filterTier);
+    }
+
+    let matchesCountry = true;
+    if (filterCountry !== 'All') {
+      matchesCountry = country === filterCountry;
+    }
+
+    return matchesSearch && matchesPosition && matchesTier && matchesCountry;
+  });
+
+  const activeCountries = Array.from(new Set(filteredPlayers.map((p: any) => p.country || p.nationality || 'Unknown'))).sort() as string[];
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <style dangerouslySetInnerHTML={{__html: `
@@ -313,6 +378,30 @@ export default function Landing({
         .nav-link { background: transparent; border: none; color: var(--t2); font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; }
         .nav-link:hover { color: var(--t1); background: var(--bg3); }
         
+        .squads-matrix {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 24px;
+          width: 100%;
+          margin-top: 20px;
+        }
+
+        .filter-bar {
+          display: grid;
+          grid-template-columns: 2fr 1fr 1fr 1fr;
+          gap: 12px;
+          background: var(--bg3);
+          border: 1px solid var(--bd2);
+          padding: 14px;
+          border-radius: 10px;
+          margin-bottom: 20px;
+        }
+
+        @media (max-width: 1024px) {
+          .squads-matrix { grid-template-columns: repeat(2, 1fr) !important; }
+          .filter-bar { grid-template-columns: 1fr 1fr !important; }
+        }
+        
         @media (max-width: 900px) {
           .landing-body { flex-direction: column !important; }
           .landing-sidebar { width: 100% !important; border-right: none !important; border-top: 1px solid var(--bd); height: auto; }
@@ -320,6 +409,8 @@ export default function Landing({
           .nav-actions { justify-content: center !important; width: 100%; margin-top: 8px; }
           .modal-content { padding: 16px !important; }
           .stat-blocks { margin-top: 24px !important; gap: 16px !important; }
+          .squads-matrix { grid-template-columns: 1fr !important; }
+          .filter-bar { grid-template-columns: 1fr !important; }
         }
       `}} />
 
@@ -327,7 +418,7 @@ export default function Landing({
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <Image 
             src="/kolacommunications.svg" 
-            alt="Kola Communications Logo" 
+            alt="KOLA Logo" 
             width={120} 
             height={32} 
             style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} 
@@ -350,7 +441,7 @@ export default function Landing({
         </div>
         <div className="nav-actions">
           <button className="nav-link" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
-          <button className="nav-link" onClick={() => alert('WC 2026 Squads & Teams module is coming soon!')}>👕 Squads & Teams</button>
+          <button className="nav-link" onClick={() => setShowSquads(true)}>👕 Squads & Teams</button>
           <button className="nav-link" onClick={() => alert('Fixtures module is coming soon!')}>📅 Fixtures</button>
           
           <div style={{ width: 1, height: 20, background: 'var(--bd2)', margin: '0 8px' }} />
@@ -398,30 +489,30 @@ export default function Landing({
         )}
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px clamp(16px,4vw,40px) 36px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,220,114,.045) 0%,transparent 70%)', pointerEvents: 'none' }} />
-        <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1, width: '100%' }}>
-          <h1 className="hero-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '108px', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
-            SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
-          </h1>
-          <p style={{ color: 'var(--t2)', fontSize: 17, maxWidth: 430, margin: '18px auto 32px', lineHeight: 1.65, fontWeight: 300 }}>
-            Host live fantasy auctions with friends. Bid on players, build your squad, and see who gets the best value.
-          </p>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn bp" onClick={handleHostAccess} style={{ fontSize: 17, padding: '13px 34px' }}>
-              {authSession ? '🚀 Host Auction' : '🔐 Login to Host'}
-            </button>
-            <button className="btn bs" onClick={() => setShowJoin(true)} style={{ fontSize: 17, padding: '13px 34px' }}>Join a Room</button>
-          </div>
-          <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
-            {[{ v: '2,400+', l: 'Auctions' }, { v: '18K+', l: 'Players Sold' }, { v: '4.9★', l: 'Rating' }].map((s) => (
-              <div key={s.l} style={{ textAlign: 'center', minWidth: 90 }}>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>{s.v}</div>
-                <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>{s.l}</div>
-              </div>
-            ))}
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,220,114,.045) 0%,transparent 70%)', pointerEvents: 'none' }} />
+          <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1, width: '100%' }}>
+            <h1 className="hero-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '108px', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
+              SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
+            </h1>
+            <p style={{ color: 'var(--t2)', fontSize: 17, maxWidth: 430, margin: '18px auto 32px', lineHeight: 1.65, fontWeight: 300 }}>
+              Host live fantasy auctions with friends. Bid on players, build your squad, and see who gets the best value.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button className="btn bp" onClick={handleHostAccess} style={{ fontSize: 17, padding: '13px 34px' }}>
+                {authSession ? '🚀 Host Auction' : '🔐 Login to Host'}
+              </button>
+              <button className="btn bs" onClick={() => setShowJoin(true)} style={{ fontSize: 17, padding: '13px 34px' }}>Join a Room</button>
+            </div>
+            <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
+              {[{ v: '2,400+', l: 'Auctions' }, { v: '18K+', l: 'Players Sold' }, { v: '4.9★', l: 'Rating' }].map((s) => (
+                <div key={s.l} style={{ textAlign: 'center', minWidth: 90 }}>
+                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>{s.v}</div>
+                  <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
       </div>
 
       <div style={{ padding: '64px clamp(16px,4vw,40px)', background: 'linear-gradient(to bottom, var(--bg) 0%, var(--bg2) 100%)', position: 'relative', overflow: 'hidden' }}>
@@ -452,6 +543,152 @@ export default function Landing({
       </div>
 
       {showQuiz && <WorldCupQuiz onClose={() => setShowQuiz(false)} />}
+
+      {/* DETAILED TEAMS & SQUADS DATA COMPOSER OVERLAY */}
+      {showSquads && (
+        <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
+          <div className="card" style={{ width: '100%', maxWidth: 1340, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--bd)', paddingBottom: 16, marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
+              <div>
+                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, margin: 0 }}>👕 SQUADS & TEAMS</h3>
+                <p style={{ color: 'var(--t3)', fontSize: 13, margin: '4px 0 0' }}>Examine structural compositions mapped via Hybrid Point Performance ceilings.</p>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <select 
+                  className="inp" 
+                  value={selectedTournament} 
+                  onChange={(e) => setSelectedTournament(e.target.value)}
+                  style={{ minWidth: 240, height: 40, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}
+                >
+                  <option value="FIFA World Cup 2026">FIFA World Cup 2026</option>
+                </select>
+                <button onClick={() => setShowSquads(false)} style={{ background: 'var(--bg3)', border: '1px solid var(--bd)', color: 'var(--t1)', width: 40, height: 40, borderRadius: 8, cursor: 'pointer', fontSize: 16, fontWeight: 'bold' }}>✕</button>
+              </div>
+            </div>
+
+            <div className="filter-bar">
+              <div>
+                <Label>Search Player / Club</Label>
+                <input 
+                  type="text" 
+                  className="inp" 
+                  placeholder="e.g. Bukayo Saka or Real Madrid..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ marginTop: 4, height: 38 }}
+                />
+              </div>
+
+              <div>
+                <Label>Filter By Team</Label>
+                <select className="inp" value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} style={{ marginTop: 4, height: 38 }}>
+                  <option value="All">All Nations ({masterCountriesList.length})</option>
+                  {masterCountriesList.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label>Filter By Position</Label>
+                <select className="inp" value={filterPosition} onChange={(e) => setFilterPosition(e.target.value)} style={{ marginTop: 4, height: 38 }}>
+                  <option value="All">All Positions</option>
+                  <option value="Goalkeeper">Goalkeepers</option>
+                  <option value="Defender">Defenders</option>
+                  <option value="Midfielder">Midfielders</option>
+                  <option value="Forward">Forwards</option>
+                </select>
+              </div>
+
+              <div>
+                <Label>Filter By Tier</Label>
+                <select className="inp" value={filterTier} onChange={(e) => setFilterTier(e.target.value)} style={{ marginTop: 4, height: 38 }}>
+                  <option value="All">All Tiers</option>
+                  <option value="1">Tier 1 (Premium)</option>
+                  <option value="2">Tier 2 (Elite)</option>
+                  <option value="3">Tier 3 (Core)</option>
+                  <option value="4">Tier 4 (Enablers)</option>
+                  <option value="5">Tier 5 (Fodder)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--t2)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
+              💡 Showing <span style={{ color: 'var(--g)' }}>{filteredPlayers.length}</span> matching players across <span style={{ color: 'var(--am)' }}>{activeCountries.length}</span> active teams.
+            </div>
+
+            {selectedTournament === 'FIFA World Cup 2026' && (
+              activeCountries.length === 0 ? (
+                <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--t3)', fontFamily: "'Rajdhani', sans-serif" }}>
+                  🚫 No players match your current filter parameters. Try expanding your parameters.
+                </div>
+              ) : (
+                <div className="squads-matrix">
+                  {activeCountries.map((countryName) => {
+                    const countryPlayers = filteredPlayers.filter((p: any) => (p.country || p.nationality || '') === countryName);
+                    
+                    const gks = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('goalkeeper') || (p.role || '').toLowerCase() === 'gk');
+                    const defs = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('defender') || (p.role || '').toLowerCase() === 'def');
+                    const mids = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('midfielder') || (p.role || '').toLowerCase().includes('midfield') || (p.role || '').toLowerCase() === 'cm');
+                    const fwds = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('forward') || (p.role || '').toLowerCase().includes('attack') || (p.role || '').toLowerCase() === 'st' || (p.role || '').toLowerCase() === 'winger');
+
+                    return (
+                      <div key={countryName} className="card" style={{ padding: 20, background: 'var(--bg2)', border: '1px solid var(--bd)', alignSelf: 'start' }}>
+                        <h4 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--g)', letterSpacing: 1.5, borderBottom: '1px solid var(--bd2)', paddingBottom: 6, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          🌍 {countryName} 
+                          <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)', marginLeft: 'auto', fontWeight: 600 }}>({countryPlayers.length})</span>
+                        </h4>
+
+                        {[
+                          { title: '🧤 Goalkeepers', list: gks },
+                          { title: '🛡️ Defenders', list: defs },
+                          { title: '🛡️ Midfielders', list: mids },
+                          { title: '🚀 Forwards', list: fwds }
+                        ].map((positionGroup) => {
+                          if (positionGroup.list.length === 0) return null;
+                          return (
+                            <div key={positionGroup.title} style={{ marginBottom: 14 }}>
+                              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                                {positionGroup.title}
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 6 }}>
+                                {positionGroup.list.map((player: any, idx: number) => {
+                                  const hybridTier = calculateHybridTier(player);
+                                  return (
+                                    <div key={idx} style={{ fontSize: 13, color: 'var(--t1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg3)', padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.02)' }}>
+                                      <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', marginRight: 8 }}>
+                                        <b>{player.name}</b> <span style={{ color: 'var(--t3)', fontSize: 11 }}>| {player.club || player.currentClub || 'No Club Data'}</span>
+                                      </div>
+                                      <span style={{ 
+                                        fontFamily: "'Rajdhani', sans-serif", 
+                                        fontSize: 10, 
+                                        fontWeight: 700, 
+                                        padding: '2px 6px', 
+                                        borderRadius: 4, 
+                                        background: hybridTier === 1 ? 'rgba(0,220,114,0.12)' : hybridTier === 2 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)', 
+                                        color: hybridTier === 1 ? 'var(--g)' : hybridTier === 2 ? 'var(--am)' : 'var(--t2)',
+                                        flexShrink: 0
+                                      }}>
+                                        T{hybridTier}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       {showJoin && (
         <div style={overlayStyle}>
@@ -543,7 +780,7 @@ export default function Landing({
                       const file = e.target.files?.[0];
                       if (!file) return;
 
-                      const img = new Image();
+                      const img = new window.Image();
                       img.onload = () => {
                         const canvas = document.createElement('canvas');
                         const MAX_SIZE = 150; 
@@ -575,7 +812,7 @@ export default function Landing({
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                  <button className="btn bs" onClick={() => { setRoomDetails(null); setTeamName(''); setTeamPhoto(null); }} style={{ flex: 1, minWidth: 100 }}>Back</button>
+                  <button className="btn bs" onClick={handleCloseJoin} style={{ flex: 1, minWidth: 100 }}>Back</button>
                   <button className="btn bp" onClick={submitJoin} disabled={loading || !userName || !teamName} style={{ flex: 2, minWidth: 180 }}>
                     {loading ? 'Joining...' : 'Join Auction →'}
                   </button>
