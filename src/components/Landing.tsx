@@ -134,8 +134,7 @@ export default function Landing({
 
   useEffect(() => {
     if (userId) {
-      const safeId = userId.replace(/[^a-zA-Z0-9_-]/g, '');
-      fetch(`/api/rooms?userId=${safeId}`)
+      fetch(`/api/rooms?userId=${encodeURIComponent(userId)}`)
         .then(res => res.json())
         .then(data => {
           if (data.history) setHistory(data.history);
@@ -157,21 +156,16 @@ export default function Landing({
     setTeamName('');
     setTeamPhoto(null);
     try {
-      // Clean string to prevent Safari Regex/Pattern crashes
-      const code = roomCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+      const code = roomCode.trim().toUpperCase();
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
       
-      const res = await fetch(`/api/rooms/${formattedCode}?t=${Date.now()}`, { cache: 'no-store' });
-      const text = await res.text();
-      let data;
+      const res = await fetch(`/api/rooms/${encodeURIComponent(formattedCode)}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Room not found or server error');
       
-      try {
-        data = JSON.parse(text);
-      } catch(e) {
-        throw new Error(`Server returned connection error: ${res.status}`);
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
       }
-
-      if (data.error) throw new Error(data.error);
       setRoomDetails(data.room as JoinRoomDetails);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Room not found');
@@ -193,8 +187,7 @@ export default function Landing({
     setLoading(true);
     setError('');
     try {
-      const cleanId = roomDetails.id.replace(/[^a-zA-Z0-9-]/g, '');
-      const res = await fetch(`/api/rooms/${cleanId}`, {
+      const res = await fetch(`/api/rooms/${encodeURIComponent(roomDetails.id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -205,16 +198,14 @@ export default function Landing({
         }),
       });
       
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error(`Vercel connection error (${res.status}). Payload might be too large.`);
+      if (!res.ok) {
+        throw new Error(`Connection Error (${res.status}). Payload might be too large.`);
       }
 
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to join');
-      
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
       onJoin(roomDetails.id, data.teamId, userName.trim());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to join');
@@ -523,7 +514,7 @@ export default function Landing({
                       const file = e.target.files?.[0];
                       if (!file) return;
 
-                      // Automatically scale the image down so Vercel does not block the request
+                      // 🚀 THE FIX: This safely shrinks the photo so Vercel never returns 413 Payload Too Large!
                       const img = new Image();
                       img.onload = () => {
                         const canvas = document.createElement('canvas');
@@ -544,7 +535,7 @@ export default function Landing({
                         const ctx = canvas.getContext('2d');
                         if (ctx) {
                           ctx.drawImage(img, 0, 0, width, height);
-                          setTeamPhoto(canvas.toDataURL('image/jpeg', 0.8)); // Output a tiny Base64 JPG!
+                          setTeamPhoto(canvas.toDataURL('image/jpeg', 0.8));
                         }
                       };
                       img.onerror = () => {
