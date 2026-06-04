@@ -52,10 +52,14 @@ export async function POST(req: Request) {
       delete room.teams;
     }
 
-    // 🚀 THE BANKER FIX: Ensure every team has a budget, spent tracker, and squad array!
+    // 🚀 FPL RULE ENFORCER: Strict Budgets & Squad Limits
+    room.budget = 10000; // Force Room Budget to exactly 100 Cr (10,000L)
+    room.squadSize = 15; // Force exactly 15 players per team
+
+    // Assign 100 Cr to every participant's wallet
     room.participants = toArr(room.participants).map((p: any) => ({
       ...p,
-      budget: p.budget || room.budget || 10000,
+      budget: 10000, 
       spent: p.spent || 0,
       squad: p.squad || []
     }));
@@ -69,7 +73,20 @@ export async function POST(req: Request) {
       hostTeam.ownerId = room.hostId;
     }
 
-    room.players = toArr(room.players);
+    // 🚀 FPL TIER PRICING ENFORCER
+    // Overrides whatever is in the database with the strict FPL Tier values
+    room.players = toArr(room.players).map((player: any) => {
+      let basePrice = 20; // Default Tier 5 Fallback
+      
+      if (player.tier === 1) basePrice = 200;      // Tier 1: ₹2.0 Cr
+      else if (player.tier === 2) basePrice = 150; // Tier 2: ₹1.5 Cr
+      else if (player.tier === 3) basePrice = 100; // Tier 3: ₹1.0 Cr
+      else if (player.tier === 4) basePrice = 50;  // Tier 4: ₹0.5 Cr
+      else if (player.tier === 5) basePrice = 20;  // Tier 5: ₹0.2 Cr
+
+      return { ...player, base: basePrice };
+    });
+
     room.chat = toArr(room.chat);
     room.bidHistory = toArr(room.bidHistory);
     room.soldLog = toArr(room.soldLog);

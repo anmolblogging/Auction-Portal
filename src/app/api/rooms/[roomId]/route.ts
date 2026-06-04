@@ -19,9 +19,13 @@ export async function GET(
     
     if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
+    // 🚀 FPL BUDGET VALIDATOR
+    room.budget = 10000;
+    room.squadSize = 15;
+
     room.participants = toArr(room.participants).map((p: any) => ({
       ...p,
-      budget: p.budget || room.budget || 10000,
+      budget: 10000, // Forces 100 Cr budget on fetch
       spent: p.spent || 0,
       squad: toArr(p.squad)
     }));
@@ -41,7 +45,6 @@ export async function GET(
   }
 }
 
-// 🚀 RESTORED: This is the function that allows players to join! 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ roomId: string }> }

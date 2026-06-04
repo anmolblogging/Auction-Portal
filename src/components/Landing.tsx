@@ -134,7 +134,8 @@ export default function Landing({
 
   useEffect(() => {
     if (userId) {
-      fetch(`/api/rooms?userId=${encodeURIComponent(userId)}`)
+      const safeId = userId.replace(/[^a-zA-Z0-9_-]/g, '');
+      fetch(`/api/rooms?userId=${safeId}`)
         .then(res => res.json())
         .then(data => {
           if (data.history) setHistory(data.history);
@@ -156,16 +157,20 @@ export default function Landing({
     setTeamName('');
     setTeamPhoto(null);
     try {
-      const code = roomCode.trim().toUpperCase();
+      const code = roomCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
       
-      const res = await fetch(`/api/rooms/${encodeURIComponent(formattedCode)}?t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Room not found or server error');
+      const res = await fetch(`/api/rooms/${formattedCode}?t=${Date.now()}`, { cache: 'no-store' });
+      const text = await res.text();
+      let data;
       
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
+      try {
+        data = JSON.parse(text);
+      } catch(e) {
+        throw new Error(`Server returned connection error: ${res.status}`);
       }
+
+      if (data.error) throw new Error(data.error);
       setRoomDetails(data.room as JoinRoomDetails);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Room not found');
@@ -187,7 +192,8 @@ export default function Landing({
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/rooms/${encodeURIComponent(roomDetails.id)}`, {
+      const cleanId = roomDetails.id.replace(/[^a-zA-Z0-9-]/g, '');
+      const res = await fetch(`/api/rooms/${cleanId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,14 +204,16 @@ export default function Landing({
         }),
       });
       
-      if (!res.ok) {
-        throw new Error(`Connection Error (${res.status}). Payload might be too large.`);
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Vercel connection error (${res.status}). Payload might be too large.`);
       }
 
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to join');
+      
       onJoin(roomDetails.id, data.teamId, userName.trim());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to join');
@@ -296,9 +304,11 @@ export default function Landing({
         .landing-body { flex-direction: row; }
         .landing-sidebar { width: clamp(260px, 25vw, 340px); border-right: 1px solid var(--bd); padding: 24px 20px; overflow-y: auto; background: rgba(0,0,0,0.15); }
         .nav-container { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px clamp(16px,4vw,40px); border-bottom: 1px solid var(--bd); }
-        .nav-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+        .nav-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+        .nav-link { background: transparent; border: none; color: var(--t2); font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; }
+        .nav-link:hover { color: var(--t1); background: var(--bg3); }
         
-        @media (max-width: 800px) {
+        @media (max-width: 900px) {
           .landing-body { flex-direction: column !important; }
           .landing-sidebar { width: 100% !important; border-right: none !important; border-top: 1px solid var(--bd); height: auto; }
           .hero-title { font-size: clamp(60px, 15vw, 90px) !important; }
@@ -309,8 +319,8 @@ export default function Landing({
       `}} />
 
       <nav className="nav-container">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)', letterSpacing: 3 }}>SAR</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <img src="/kola.png" alt="KOLA" style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} />
           {authSession && (
             <span
               className="tag"
@@ -318,6 +328,8 @@ export default function Landing({
                 background: authSession.isAdmin ? 'rgba(245,158,11,0.12)' : 'rgba(0,220,114,0.1)',
                 color: authSession.isAdmin ? 'var(--am)' : 'var(--g)',
                 border: `1px solid ${authSession.isAdmin ? 'rgba(245,158,11,0.2)' : 'rgba(0,220,114,0.18)'}`,
+                padding: '4px 10px',
+                fontSize: 11
               }}
             >
               {authSession.isAdmin ? 'Admin Mode' : `Logged In: ${authSession.userId}`}
@@ -325,7 +337,12 @@ export default function Landing({
           )}
         </div>
         <div className="nav-actions">
-          <button className="btn bs bsm" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
+          <button className="nav-link" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
+          <button className="nav-link" onClick={() => alert('WC 2026 Squads & Teams module is coming soon!')}>👕 Squads & Teams</button>
+          <button className="nav-link" onClick={() => alert('Fixtures module is coming soon!')}>📅 Fixtures</button>
+          
+          <div style={{ width: 1, height: 20, background: 'var(--bd2)', margin: '0 8px' }} />
+          
           <button className="btn bs bsm" onClick={() => setShowJoin(true)}>Join Room</button>
           {authSession ? (
             <>
@@ -514,7 +531,6 @@ export default function Landing({
                       const file = e.target.files?.[0];
                       if (!file) return;
 
-                      // 🚀 THE FIX: This safely shrinks the photo so Vercel never returns 413 Payload Too Large!
                       const img = new Image();
                       img.onload = () => {
                         const canvas = document.createElement('canvas');
