@@ -143,6 +143,7 @@ export default function Landing({
   const [showJoin, setShowJoin] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [showSquads, setShowSquads] = useState(false); 
+  const [showSquadMenu, setShowSquadMenu] = useState(false); 
   const [selectedTournament, setSelectedTournament] = useState('FIFA World Cup 2026');
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -441,7 +442,39 @@ export default function Landing({
         </div>
         <div className="nav-actions">
           <button className="nav-link" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
-          <button className="nav-link" onClick={() => setShowSquads(true)}>👕 Squads & Teams</button>
+          
+          <div 
+            style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
+            onMouseEnter={() => setShowSquadMenu(true)}
+            onMouseLeave={() => setShowSquadMenu(false)}
+          >
+            <button className="nav-link">👕 Squads & Teams ▾</button>
+            {showSquadMenu && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '100%', 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                background: 'var(--bg)', 
+                border: '1px solid var(--bd2)', 
+                borderRadius: 8, 
+                padding: '6px 0', 
+                minWidth: 200, 
+                zIndex: 1000, 
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                marginTop: 0
+              }}>
+                <button 
+                  className="nav-link" 
+                  style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} 
+                  onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowSquads(true); setShowSquadMenu(false); }}
+                >
+                  ⚽ FIFA World Cup 2026
+                </button>
+              </div>
+            )}
+          </div>
+
           <button className="nav-link" onClick={() => alert('Fixtures module is coming soon!')}>📅 Fixtures</button>
           
           <div style={{ width: 1, height: 20, background: 'var(--bd2)', margin: '0 8px' }} />
@@ -491,6 +524,11 @@ export default function Landing({
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px clamp(16px,4vw,40px) 36px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,220,114,.045) 0%,transparent 70%)', pointerEvents: 'none' }} />
           <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1, width: '100%' }}>
+            
+            <div style={{ display: 'inline-block', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>
+              Developed by <span style={{ color: 'var(--g)' }}>Kola</span>
+            </div>
+
             <h1 className="hero-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '108px', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
               SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
             </h1>
@@ -659,7 +697,8 @@ export default function Landing({
                                   return (
                                     <div key={idx} style={{ fontSize: 13, color: 'var(--t1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg3)', padding: '5px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.02)' }}>
                                       <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', marginRight: 8 }}>
-                                        <b>{player.name}</b> <span style={{ color: 'var(--t3)', fontSize: 11 }}>| {player.club || player.currentClub || 'No Club Data'}</span>
+                                        <b>{player.name}</b> 
+                                        {player.club ? <span style={{ color: 'var(--t3)', fontSize: 11 }}> | {player.club}</span> : null}
                                       </div>
                                       <span style={{ 
                                         fontFamily: "'Rajdhani', sans-serif", 
