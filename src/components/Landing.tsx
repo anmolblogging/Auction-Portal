@@ -43,6 +43,19 @@ interface JoinRoomDetails {
   }>;
 }
 
+// Country Flag Mapper
+const FLAGS: Record<string, string> = {
+  'Argentina': '🇦🇷', 'France': '🇫🇷', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Brazil': '🇧🇷',
+  'Spain': '🇪🇸', 'Germany': '🇩🇪', 'Portugal': '🇵🇹', 'Netherlands': '🇳🇱',
+  'Italy': '🇮🇹', 'Belgium': '🇧🇪', 'Uruguay': '🇺🇾', 'Croatia': '🇭🇷',
+  'Morocco': '🇲🇦', 'Colombia': '🇨🇴', 'USA': '🇺🇸', 'Canada': '🇨🇦',
+  'Mexico': '🇲🇽', 'Switzerland': '🇨🇭', 'Japan': '🇯🇵', 'Senegal': '🇸🇳',
+  'South Korea': '🇰🇷', 'Poland': '🇵🇱', 'Saudi Arabia': '🇸🇦', 'Australia': '🇦🇺',
+  'Ecuador': '🇪🇨', 'Sweden': '🇸🇪', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Norway': '🇳🇴',
+  'Wales': '🏴󠁧󠁢󠁷󠁬󠁳󠁿', 'Denmark': '🇩🇰', 'Serbia': '🇷🇸', 'Ghana': '🇬🇭'
+};
+const getFlag = (country: string) => FLAGS[country] || '🏳️';
+
 const FEATURES = [
   ['⚡', 'Live Bidding', '30s countdown — every bid adds +15 seconds, capped at 30s'],
   ['🔍', 'AI Player Scout', 'Search any player name or URL; AI fetches role, country & base price'],
@@ -108,11 +121,11 @@ function AnimatedStat({ target, label, suffix = '', prefix = '', decimals = 0, i
     : Math.floor(count).toLocaleString('en-US');
 
   return (
-    <div style={{ textAlign: 'center', minWidth: 90 }}>
-      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>
+    <div style={{ textAlign: 'center', width: 130, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start' }}>
+      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
         {prefix}{formatted}{suffix}
       </div>
-      <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>
+      <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 4 }}>
         {label}
       </div>
     </div>
@@ -207,11 +220,9 @@ export default function Landing({
   const [matchGroupFilter, setMatchGroupFilter] = useState('All');
   const [matchTeamFilter, setMatchTeamFilter] = useState('All');
 
-  // Premier League News State
   const [newsPosts, setNewsPosts] = useState<any[]>([]);
 
   useEffect(() => {
-    // Fetch News Articles from WordPress JSON API
     fetch('https://premierleaguenewsnow.com/wp-json/wp/v2/posts?per_page=6&_fields=id,title,link')
       .then(res => res.json())
       .then(data => {
@@ -257,50 +268,27 @@ export default function Landing({
   const isAdmin = authSession?.isAdmin ?? false;
   
   async function checkRoom() {
-    if (!roomCode.trim()) {
-      setError('Please enter a room code');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    setRoomDetails(null);
-    setTeamName('');
-    setTeamPhoto(null);
+    if (!roomCode.trim()) { setError('Please enter a room code'); return; }
+    setLoading(true); setError(''); setRoomDetails(null); setTeamName(''); setTeamPhoto(null);
     try {
       const code = roomCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
       const formattedCode = code.startsWith('AUC-') ? code : `AUC-${code}`;
-      
       const res = await fetch(`/api/rooms/${formattedCode}?t=${Date.now()}`, { cache: 'no-store' });
       const text = await res.text();
       let data;
-      
-      try {
-        data = JSON.parse(text);
-      } catch(e) {
-        throw new Error(`Server returned connection error: ${res.status}`);
-      }
-
+      try { data = JSON.parse(text); } catch(e) { throw new Error(`Server returned connection error: ${res.status}`); }
       if (data.error) throw new Error(data.error);
       setRoomDetails(data.room as JoinRoomDetails);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Room not found');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function submitJoin() {
     if (!roomDetails) return;
-    if (!userName.trim()) {
-      setError('Please enter your display name');
-      return;
-    }
-    if (!teamName.trim()) {
-      setError('Please enter your team name');
-      return;
-    }
-    setLoading(true);
-    setError('');
+    if (!userName.trim()) { setError('Please enter your display name'); return; }
+    if (!teamName.trim()) { setError('Please enter your team name'); return; }
+    setLoading(true); setError('');
     try {
       const cleanId = roomDetails.id.replace(/[^a-zA-Z0-9-]/g, '');
       const res = await fetch(`/api/rooms/${cleanId}`, {
@@ -308,51 +296,25 @@ export default function Landing({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, userName: userName.trim(), teamName: teamName.trim(), teamPhoto }),
       });
-      
       const text = await res.text();
       let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error(`Vercel connection error (${res.status}). Payload might be too large.`);
-      }
-
+      try { data = JSON.parse(text); } catch (e) { throw new Error(`Vercel connection error (${res.status}).`); }
       if (!res.ok || data.error) throw new Error(data.error || 'Failed to join');
-      
       onJoin(roomDetails.id, data.teamId, userName.trim());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to join');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  function handleCloseJoin() {
-    setShowJoin(false); setRoomCode(''); setUserName(''); setTeamName(''); setTeamPhoto(null); setRoomDetails(null); setError('');
-  }
-
-  function openLogin(intent: 'nav' | 'host') {
-    setLoginIntent(intent); setLoginError(''); setLoginForm({ userId: '', password: '' }); setShowLogin(true);
-  }
-
-  function closeLogin() {
-    setShowLogin(false); setLoginError(''); setLoginForm({ userId: '', password: '' });
-  }
-
-  function handleHostAccess() {
-    if (authSession) { onStart(); return; }
-    openLogin('host');
-  }
+  function handleCloseJoin() { setShowJoin(false); setRoomCode(''); setUserName(''); setTeamName(''); setTeamPhoto(null); setRoomDetails(null); setError(''); }
+  function openLogin(intent: 'nav' | 'host') { setLoginIntent(intent); setLoginError(''); setLoginForm({ userId: '', password: '' }); setShowLogin(true); }
+  function closeLogin() { setShowLogin(false); setLoginError(''); setLoginForm({ userId: '', password: '' }); }
+  function handleHostAccess() { if (authSession) { onStart(); return; } openLogin('host'); }
 
   function submitLogin() {
     if (!loginForm.userId.trim() || !loginForm.password.trim()) { setLoginError('Enter both user ID and password'); return; }
-    try {
-      onLogin(loginForm.userId, loginForm.password);
-      closeLogin();
-      if (loginIntent === 'host') onStart();
-    } catch (e: unknown) {
-      setLoginError(e instanceof Error ? e.message : 'Login failed');
-    }
+    try { onLogin(loginForm.userId, loginForm.password); closeLogin(); if (loginIntent === 'host') onStart(); } 
+    catch (e: unknown) { setLoginError(e instanceof Error ? e.message : 'Login failed'); }
   }
 
   function submitManagedUser() {
@@ -408,16 +370,12 @@ export default function Landing({
 
   const uniqueMatchGroups = Array.from(new Set(apiFixtures.map(f => f.stage.split(' - ')[1] || null).filter(Boolean))).sort() as string[];
   const uniqueMatchTeams = Array.from(new Set([...apiFixtures.map(f => f.team1), ...apiFixtures.map(f => f.team2)])).filter(t => t && t !== 'TBD').sort() as string[];
-
   const QUIZ_CATEGORIES = ['General World Cup', 'Argentina', 'Brazil', 'France', 'Germany', 'England', 'Spain', 'Portugal', 'Netherlands', 'Belgium', 'Croatia', 'Sweden', 'Scotland', 'Norway'];
-
-  // Multiply the news array for a seamless infinite scroll effect
   const marqueeItems = [...newsPosts, ...newsPosts, ...newsPosts, ...newsPosts];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <style dangerouslySetInnerHTML={{__html: `
-        /* STICKY HEADER SYSTEM */
         .global-sticky-header {
           position: sticky;
           top: 0;
@@ -427,7 +385,6 @@ export default function Landing({
           border-bottom: 1px solid var(--bd);
         }
 
-        /* DYNAMIC NEWS MARQUEE */
         .marquee-wrapper {
           background: var(--g);
           color: #05070E;
@@ -501,7 +458,6 @@ export default function Landing({
       `}} />
 
       <header className="global-sticky-header">
-        {/* Dynamic WordPress Marquee */}
         {newsPosts.length > 0 && (
           <div className="marquee-wrapper">
             <div className="marquee-track">
@@ -515,17 +471,18 @@ export default function Landing({
           </div>
         )}
 
-        {/* Global Nav Menu */}
         <nav className="nav-container">
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <Image 
-              src="/kolacommunications.svg" 
-              alt="KOLA Logo" 
-              width={120} 
-              height={32} 
-              style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} 
-              priority 
-            />
+            <a href="/" style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <Image 
+                src="/kolacommunications.svg" 
+                alt="KOLA Logo" 
+                width={120} 
+                height={32} 
+                style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} 
+                priority 
+              />
+            </a>
             {authSession && (
               <span
                 className="tag"
@@ -623,24 +580,40 @@ export default function Landing({
           <div style={{ textAlign: 'center', animation: 'fadeUp .55s ease', position: 'relative', zIndex: 1, width: '100%' }}>
             
             <div style={{ display: 'inline-block', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>
-              Developed by <span style={{ color: 'var(--g)' }}>Kola</span>
+              Developed by <a href="https://kolacommunications.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--g)', textDecoration: 'none' }}>Kola</a>
             </div>
 
-            <h1 className="hero-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '108px', lineHeight: 0.87, letterSpacing: 4, marginBottom: 14 }}>
+            <h1 className="hero-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '108px', lineHeight: 0.87, letterSpacing: 4, margin: '0 0 14px 0' }}>
               SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
             </h1>
-            <p style={{ color: 'var(--t2)', fontSize: 17, maxWidth: 430, margin: '18px auto 32px', lineHeight: 1.65, fontWeight: 300 }}>
+
+            {/* PLNN Integration Badge */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 28 }}>
+              <span style={{ fontSize: 12, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>In Association With</span>
+              <a href="https://premierleaguenewsnow.com" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: 8, border: '1px solid var(--bd2)', fontSize: 13, fontFamily: "'Rajdhani', sans-serif", fontWeight: 'bold', color: 'var(--t1)', textDecoration: 'none', transition: 'all 0.2s ease', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.borderColor = 'var(--g)'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'var(--bd2)'; }}>
+                Premier League News Now <span style={{ color: 'var(--g)', marginLeft: 4 }}>↗</span>
+              </a>
+            </div>
+
+            <p style={{ color: 'var(--t2)', fontSize: 17, maxWidth: 430, margin: '0 auto 32px', lineHeight: 1.65, fontWeight: 300 }}>
               Host live fantasy auctions with friends. Bid on players, build your squad, and see who gets the best value.
             </p>
+            
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="btn bp" onClick={handleHostAccess} style={{ fontSize: 17, padding: '13px 34px' }}>
                 {authSession ? '🚀 Host Auction' : '🔐 Login to Host'}
               </button>
               <button className="btn bs" onClick={() => setShowJoin(true)} style={{ fontSize: 17, padding: '13px 34px' }}>Join a Room</button>
             </div>
+
+            {!authSession && (
+              <div style={{ marginTop: 18, fontSize: 14, color: 'var(--t3)', fontFamily: "'Rajdhani', sans-serif", letterSpacing: 0.5 }}>
+                Want to host? Email <a href="mailto:business@kolacommunications.com" style={{ color: 'var(--g)', textDecoration: 'none', fontWeight: 'bold' }}>business@kolacommunications.com</a>
+              </div>
+            )}
             
-            {/* REAL ANIMATED COUNTERS */}
-            <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
+            {/* UNIFORM ANIMATED COUNTERS */}
+            <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <AnimatedStat target={2400} label="Auctions" suffix="+" />
               <AnimatedStat target={18} label="Players Sold" suffix="K+" isK={true} />
               <AnimatedStat target={4.9} label="Rating" suffix="★" decimals={1} isK={true} />
@@ -758,9 +731,9 @@ export default function Landing({
                                   Match {fixture.matchNumber} • {fixture.stage}
                                 </span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-                                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--t1)', letterSpacing: 0.5 }}>{fixture.team1}</span>
+                                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--t1)', letterSpacing: 0.5 }}>{getFlag(fixture.team1)} {fixture.team1}</span>
                                   <span style={{ fontSize: 12, color: 'var(--t3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>VS</span>
-                                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--t1)', letterSpacing: 0.5 }}>{fixture.team2}</span>
+                                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--t1)', letterSpacing: 0.5 }}>{getFlag(fixture.team2)} {fixture.team2}</span>
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
@@ -819,7 +792,7 @@ export default function Landing({
                               <tr key={row.team.name} style={{ background: row.team.name.toLowerCase() === matchTeamFilter.toLowerCase() ? 'rgba(0,220,114,0.06)' : 'transparent' }}>
                                 <td style={{ fontWeight: 600, color: 'var(--t3)' }}>{row.position}</td>
                                 <td style={{ fontWeight: 600, color: 'var(--t1)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
-                                  {row.team.name}
+                                  {getFlag(row.team.name)} {row.team.name}
                                 </td>
                                 <td style={{ textAlign: 'center', color: 'var(--t2)' }}>{row.playedGames}</td>
                                 <td style={{ textAlign: 'center', color: row.goalDifference > 0 ? 'var(--g)' : row.goalDifference < 0 ? 'var(--re)' : 'var(--t3)' }}>
@@ -866,7 +839,7 @@ export default function Landing({
                 <Label>Filter By Team</Label>
                 <select className="inp" value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} style={{ marginTop: 4, height: 38 }}>
                   <option value="All">All Nations ({masterCountriesList.length})</option>
-                  {masterCountriesList.map(c => <option key={c} value={c}>{c}</option>)}
+                  {masterCountriesList.map(c => <option key={c} value={c}>{getFlag(c)} {c}</option>)}
                 </select>
               </div>
               <div>
@@ -892,6 +865,10 @@ export default function Landing({
               </div>
             </div>
 
+            <div style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--t2)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
+              💡 Showing <span style={{ color: 'var(--g)' }}>{filteredPlayers.length}</span> matching players across <span style={{ color: 'var(--am)' }}>{activeCountries.length}</span> active teams.
+            </div>
+
             {selectedTournament === 'FIFA World Cup 2026' && (
               activeCountries.length === 0 ? (
                 <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--t3)', fontFamily: "'Rajdhani', sans-serif" }}>
@@ -909,7 +886,7 @@ export default function Landing({
                     return (
                       <div key={countryName} className="card" style={{ padding: 20, background: 'var(--bg2)', border: '1px solid var(--bd)', alignSelf: 'start' }}>
                         <h4 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--g)', letterSpacing: 1.5, borderBottom: '1px solid var(--bd2)', paddingBottom: 6, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          🌍 {countryName} 
+                          {getFlag(countryName)} {countryName} 
                           <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)', marginLeft: 'auto', fontWeight: 600 }}>({countryPlayers.length})</span>
                         </h4>
 
@@ -935,7 +912,7 @@ export default function Landing({
                                         {player.club ? <span style={{ color: 'var(--t3)', fontSize: 11 }}> | {player.club}</span> : null}
                                       </div>
                                       <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: hybridTier === 1 ? 'rgba(0,220,114,0.12)' : hybridTier === 2 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)', color: hybridTier === 1 ? 'var(--g)' : hybridTier === 2 ? 'var(--am)' : 'var(--t2)', flexShrink: 0 }}>
-                                        T{hybridTier}
+                                        Tier {hybridTier}
                                       </span>
                                     </div>
                                   );
@@ -1062,12 +1039,23 @@ export default function Landing({
               <div><h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>LOGIN</h3></div>
               <button onClick={closeLogin} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
             </div>
+            
             {loginError && <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: 'var(--re)', border: '1px solid rgba(239,68,68,0.2)' }}>⚠️ {loginError}</div>}
+            
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><Label>User ID</Label><input className="inp" value={loginForm.userId} onChange={(e) => setLoginForm((prev) => ({ ...prev, userId: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }} /></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><Label>Password</Label><input className="inp" type="password" value={loginForm.password} onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }} /></div>
             </div>
+            
             <button className="btn bp" onClick={submitLogin} style={{ width: '100%', padding: 12 }}>Login →</button>
+
+            {/* Email Contact Box in Login Modal */}
+            <div style={{ marginTop: 4, padding: '16px', background: 'rgba(0,220,114,0.05)', border: '1px solid rgba(0,220,114,0.15)', borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--t1)', marginBottom: 4 }}>Want to host your own auction?</div>
+              <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Get in touch with us to create your custom host account.</div>
+              <a href="mailto:business@kolacommunications.com" style={{ display: 'inline-block', background: 'var(--bg3)', border: '1px solid var(--bd2)', padding: '6px 16px', borderRadius: 6, color: 'var(--g)', fontSize: 13, fontWeight: 'bold', textDecoration: 'none', transition: 'all 0.2s' }}>✉️ business@kolacommunications.com</a>
+            </div>
+
           </div>
         </div>
       )}
