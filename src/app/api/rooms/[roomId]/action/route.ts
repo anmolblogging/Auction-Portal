@@ -38,11 +38,51 @@ export async function POST(
     const now = Date.now();
 
     switch (action.type) {
-      // 🚀 THE NEW GAME LOOP ENGINE
-      case 'ADVANCE': {
-        // Prevent premature advancing with a 2-second drift allowance
-        if (!room.endsAt || now < (room.endsAt - 2000)) break; 
+      // --- HOST CONTROLS ---
+      case 'PAUSE': {
+        if (room.hostId !== userId) return NextResponse.json({ error: 'Only host can pause' }, { status: 403 });
+        
+        // Capture the exact milliseconds remaining on the clock
+        const remainingMs = room.endsAt ? Math.max(0, room.endsAt - now) : 30000;
+        
+        room.phase = 'paused';
+        room.timeLeft = remainingMs; // Temporarily store the remaining time
+        room.endsAt = null;
+        room.chat.push({ id: now, user: 'System', msg: '⏸️ Auction paused by host.' });
+        room.chat = room.chat.slice(-60);
+        
+        await saveRoom(room, { skipPlayers: true });
+        break;
+      }
+      case 'RESUME': {
+        if (room.hostId !== userId) return NextResponse.json({ error: 'Only host can resume' }, { status: 403 });
+        
+        // Take the exact paused time and add a 3 second (3000ms) buffer
+        const resumeMs = (room.timeLeft || 0) + 3000;
+        
+        room.phase = 'bidding';
+        room.endsAt = now + resumeMs;
+        room.timeLeft = 0; // Clear the temporary storage
+        
+        room.chat.push({ id: now, user: 'System', msg: '▶️ Auction resumed (+3s)' });
+        room.chat = room.chat.slice(-60);
+        
+        await saveRoom(room, { skipPlayers: true });
+        break;
+      }
+      case 'END_AUCTION': {
+        if (room.hostId !== userId) return NextResponse.json({ error: 'Only host can end' }, { status: 403 });
+        room.phase = 'done';
+        room.endsAt = null;
+        room.chat.push({ id: now, user: 'System', msg: '🛑 Auction ended early by host.' });
+        room.chat = room.chat.slice(-60);
+        await saveRoom(room, { skipPlayers: true });
+        break;
+      }
 
+      // --- STANDARD LOOP ---
+      case 'ADVANCE': {
+        if (!room.endsAt || now < (room.endsAt - 2000)) break; 
         let updated = false;
 
         if (room.phase === 'bidding') {
@@ -88,8 +128,8 @@ export async function POST(
       }
 
       case 'START': {
-        if (room.hostId !== userId) return NextResponse.json({ error: 'Only the host can start the auction' }, { status: 403 });
-        if (room.phase !== 'lobby' && room.phase !== 'scheduled') return NextResponse.json({ error: 'Auction has already started' }, { status: 400 });
+        if (room.hostId !== userId) return NextResponse.json({ error: 'Only the host can start' }, { status: 403 });
+        if (room.phase !== 'lobby' && room.phase !== 'scheduled') return NextResponse.json({ error: 'Already started' }, { status: 400 });
 
         room.phase = 'bidding';
         room.playerIdx = 0;
@@ -111,7 +151,7 @@ export async function POST(
         
         if (team.ownerId && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
         if (bidder === room.currentBidder) return NextResponse.json({ error: 'You are already the highest bidder' }, { status: 400 });
-        if (room.passedBy.includes(bidder)) return NextResponse.json({ error: 'You passed on this player and can no longer bid' }, { status: 400 });
+        if (room.passedBy.includes(bidder)) return NextResponse.json({ error: 'You passed on this player' }, { status: 400 });
 
         const nextBidVal = (room.currentBid || 0) + amount;
         if (team.spent + nextBidVal > team.budget) return NextResponse.json({ error: 'Insufficient budget' }, { status: 400 });
@@ -128,7 +168,7 @@ export async function POST(
       }
 
       case 'SKIP': {
-        if (room.hostId !== userId) return NextResponse.json({ error: 'Only the host can skip a player' }, { status: 403 });
+        if (room.hostId !== userId) return NextResponse.json({ error: 'Only the host can skip' }, { status: 403 });
         if (room.phase !== 'bidding') return NextResponse.json({ error: 'Can only skip during active bidding' }, { status: 400 });
 
         const skipped = room.players[room.playerIdx];
@@ -139,7 +179,7 @@ export async function POST(
 
         room.chat.push({
           id: now, user: 'System',
-          msg: hadBid ? `⏭️ Host skipped ${skipped?.name ?? 'the player'} — standing bid discarded.` : `⏭️ Host skipped ${skipped?.name ?? 'the player'} — no bids.`,
+          msg: hadBid ? `⏭️ Host skipped ${skipped?.name ?? 'the player'} — bid discarded.` : `⏭️ Host skipped ${skipped?.name ?? 'the player'}.`,
         });
         room.chat = room.chat.slice(-60);
 
@@ -155,7 +195,7 @@ export async function POST(
         if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
         
         if (team.ownerId && team.ownerId !== userId) return NextResponse.json({ error: 'You do not own this team' }, { status: 403 });
-        if (bidder === room.currentBidder) return NextResponse.json({ error: "You're the highest bidder — you can't pass" }, { status: 400 });
+        if (bidder === room.currentBidder) return NextResponse.json({ error: "You're the highest bidder" }, { status: 400 });
 
         if (!room.passedBy.includes(bidder)) {
           room.passedBy.push(bidder);
@@ -169,7 +209,7 @@ export async function POST(
             const winner = room.participants.find((p: any) => p.id === room.currentBidder);
             room.phase = 'sold';
             room.endsAt = now + 1500;
-            room.chat.push({ id: now + 1, user: 'System', msg: `🔨 SOLD! ${room.players[room.playerIdx]?.name ?? 'Player'} to ${winner?.name ?? 'the bidder'} for ₹${room.currentBid}L — everyone else passed.` });
+            room.chat.push({ id: now + 1, user: 'System', msg: `🔨 SOLD! ${room.players[room.playerIdx]?.name ?? 'Player'} to ${winner?.name ?? 'the bidder'} for ₹${room.currentBid}L.` });
           }
 
           room.chat = room.chat.slice(-60);
@@ -189,7 +229,7 @@ export async function POST(
         break;
       }
 
-      default: return NextResponse.json({ error: `Unsupported action type: ${action.type}` }, { status: 400 });
+      default: return NextResponse.json({ error: `Unsupported action type` }, { status: 400 });
     }
 
     const freshRoom = await getRoom(roomId);

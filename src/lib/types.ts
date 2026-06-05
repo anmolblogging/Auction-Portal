@@ -43,7 +43,7 @@ export interface SoldLogEntry {
   price: number;
 }
 
-export type AuctionPhase = 'lobby' | 'scheduled' | 'bidding' | 'sold' | 'unsold' | 'done';
+export type AuctionPhase = 'lobby' | 'scheduled' | 'bidding' | 'sold' | 'unsold' | 'done' | 'paused';
 
 export interface AuctionState {
   phase: AuctionPhase;
@@ -72,10 +72,8 @@ export interface ServerRoom extends AuctionState {
   hostId?: string;
   createdAt?: number;
   updatedAt?: number;
-  // Team IDs that have passed (opted out) on the CURRENT player. Reset each player.
   passedBy?: string[];
 }
-
 
 export type AuctionAction =
   | { type: 'TICK' }
@@ -83,7 +81,12 @@ export type AuctionAction =
   | { type: 'NEXT' }
   | { type: 'SKIP' }
   | { type: 'PASS'; bidder: string }
-  | { type: 'CHAT'; msg: string; user?: string };
+  | { type: 'CHAT'; msg: string; user?: string }
+  | { type: 'PAUSE' }
+  | { type: 'RESUME' }
+  | { type: 'END_AUCTION' }
+  | { type: 'ADVANCE' }
+  | { type: 'START' };
 
 export interface RoomConfig {
   name: string;

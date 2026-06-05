@@ -11,7 +11,6 @@ import { RBadge, TBadge } from '@/components/ui/Badges';
 import Spinner from '@/components/ui/Spinner';
 import { playerFlag } from '@/lib/flags';
 
-// --- FRONTEND HYBRID RULE ENFORCER ---
 function calculateHybridTier(player: any): number {
   const team = (player.country || player.nationality || '').toLowerCase().trim();
   const position = (player.role || player.position || '').toLowerCase().trim();
@@ -37,7 +36,6 @@ function calculateHybridTier(player: any): number {
   return 5;
 }
 
-// Maps players dynamically for UI preview
 function applySportRules(sport: string, rawPlayers: Player[]): Player[] {
   if (sport.toLowerCase().includes('football') || sport.toLowerCase().includes('fifa')) {
     return rawPlayers.map(p => {
@@ -49,13 +47,11 @@ function applySportRules(sport: string, rawPlayers: Player[]): Player[] {
       if (tierNum === 4) newBase = 50;
       if (tierNum === 5) newBase = 20;
       
-      // Update UI explicitly so badges and numbers show correctly
       return { ...p, tier: `Tier ${tierNum}`, base: newBase };
     });
   }
   return rawPlayers;
 }
-// ------------------------------------
 
 interface CreateRoomProps {
   userId: string;
@@ -67,63 +63,32 @@ const SPORT_OPTIONS = [
   'Cricket / IPL',
   'Football / UEFA',
   'Football / FIFA',
-  'Basketball / NBA',
-  'Custom',
 ];
 
 function getDefaultTournament(sport: string) {
   if (sport.includes('IPL')) return 'IPL 2025';
   if (sport.includes('UEFA')) return 'UEFA Champions League';
   if (sport.includes('FIFA')) return 'FIFA World Cup';
-  if (sport.includes('NBA')) return 'NBA Season';
-  return 'Custom Tournament';
+  return 'Tournament';
 }
 
 function getRoleOptions(sport: string) {
   if (sport.includes('Football')) {
     return ['Forward', 'Midfielder', 'Defender', 'Goalkeeper'];
   }
-  if (sport.includes('Basketball')) {
-    return ['Guard', 'Forward', 'Center'];
-  }
   return ['Batter', 'Bowler', 'All-rounder', 'WK-Batter'];
 }
 
 function makeInitials(name: string) {
-  return name
-    .split(' ')
-    .map((word) => word[0] || '')
-    .join('')
-    .slice(0, 3)
-    .toUpperCase();
+  return name.split(' ').map((w) => w[0] || '').join('').slice(0, 3).toUpperCase();
 }
 
 function Lbl({ children }: { children: ReactNode }) {
-  return (
-    <label
-      style={{
-        fontFamily: "'Rajdhani', sans-serif",
-        fontSize: 11,
-        fontWeight: 700,
-        color: 'var(--t3)',
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        display: 'block',
-        marginBottom: 4,
-      }}
-    >
-      {children}
-    </label>
-  );
+  return <label style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>{children}</label>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <Lbl>{label}</Lbl>
-      {children}
-    </div>
-  );
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}><Lbl>{label}</Lbl>{children}</div>;
 }
 
 export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps) {
@@ -131,10 +96,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
   const [roomId] = useState(() => `AUC-${Math.floor(1000 + Math.random() * 9000)}`);
   
   const [clientNow, setClientNow] = useState<number | null>(null);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect 
-    setClientNow(Date.now());
-  }, []);
+  useEffect(() => { setClientNow(Date.now()); }, []);
   
   const [cfg, setCfg] = useState<RoomConfig & { enableBots: boolean }>({
     name: 'IPL Fantasy 2025',
@@ -146,8 +108,8 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
     enableBots: true,
   });
 
-  // Automatically enforce sport formatting on default render
   const [players, setPlayers] = useState<Player[]>(() => applySportRules('Cricket / IPL', getPlayersForSport('Cricket / IPL')));
+  const [isCustomPool, setIsCustomPool] = useState(false); 
   
   const [hostTeamName, setHostTeamName] = useState('Your Team');
   const [hostTeamPhoto, setHostTeamPhoto] = useState<string | null>(null);
@@ -162,26 +124,15 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
   const [launchErr, setLaunchErr] = useState('');
   const [launchMode, setLaunchMode] = useState<'now' | 'schedule'>('now');
 
-  const getDefaultSchedule = () => {
-    const date = new Date();
-    date.setHours(date.getHours() + 1);
-    date.setMinutes(date.getMinutes() >= 30 ? 0 : 30, 0, 0);
-    const dateStr = date.toISOString().split('T')[0];
-    const timeStr = date.toTimeString().slice(0, 5);
-    return { date: dateStr, time: timeStr };
-  };
-
-  const defaults = getDefaultSchedule();
+  const defaults = (() => {
+    const d = new Date(); d.setHours(d.getHours() + 1); d.setMinutes(d.getMinutes() >= 30 ? 0 : 30, 0, 0);
+    return { date: d.toISOString().split('T')[0], time: d.toTimeString().slice(0, 5) };
+  })();
   const [scheduledDate, setScheduledDate] = useState(defaults.date);
   const [scheduledTime, setScheduledTime] = useState(defaults.time);
 
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualP, setManualP] = useState({
-    name: '',
-    role: getRoleOptions('Cricket / IPL')[0],
-    country: 'India',
-    base: 50,
-  });
+  const [manualP, setManualP] = useState({ name: '', role: getRoleOptions('Cricket / IPL')[0], country: 'India', base: 50 });
 
   const xlRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -190,84 +141,48 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
   const roleOptions = getRoleOptions(cfg.sport);
 
   function handleSportChange(sport: string) {
-    setCfg((prev) => ({
-      ...prev,
-      sport,
-      tournament: getDefaultTournament(sport),
-    }));
-    
-    // Automatically enforce sport formatting when switching dropdown options
+    setCfg((prev) => ({ ...prev, sport, tournament: getDefaultTournament(sport) }));
     setPlayers(applySportRules(sport, getPlayersForSport(sport)));
-    
-    setSRes([]);
-    setSErr('');
-    setShowManualForm(false);
-    setManualP({
-      name: '',
-      role: getRoleOptions(sport)[0],
-      country: sport.includes('Football') ? 'England' : sport.includes('Basketball') ? 'USA' : 'India',
-      base: 50,
-    });
+    setIsCustomPool(false); 
+    setSRes([]); setSErr(''); setShowManualForm(false);
+    setManualP({ name: '', role: getRoleOptions(sport)[0], country: sport.includes('Football') ? 'England' : 'India', base: 50 });
   }
 
   async function doSearch() {
     if (!sq.trim()) return;
-    setSLoad(true);
-    setSErr('');
-    setSRes([]);
+    setSLoad(true); setSErr(''); setSRes([]);
     try {
-      const res = await fetch('/api/search-player', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: sq }),
-      });
+      const res = await fetch('/api/search-player', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: sq }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setSRes(data.players || []);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Search failed';
-      setSErr(
-        msg.includes('API_KEY')
-          ? 'Add GROQ_API_KEY to .env.local to enable AI search.'
-          : `Search failed: ${msg}`
-      );
+      setSErr(e instanceof Error && e.message.includes('API_KEY') ? 'Add GROQ_API_KEY to .env.local to enable AI search.' : `Search failed: ${e instanceof Error ? e.message : 'Error'}`);
     }
     setSLoad(false);
   }
 
   function addResult(player: Player) {
-    // Re-format array to assign dynamic prices safely when adding
-    setPlayers((prev) => applySportRules(cfg.sport, [...prev, { ...player, id: Date.now() + Math.random() }]));
+    setPlayers((prev) => {
+      if (!isCustomPool) { setIsCustomPool(true); return applySportRules(cfg.sport, [{ ...player, id: Date.now() + Math.random() }]); }
+      return applySportRules(cfg.sport, [...prev, { ...player, id: Date.now() + Math.random() }]);
+    });
     setSRes((results) => results.filter((item) => item.name !== player.name));
   }
 
   function saveManualPlayer() {
     if (!manualP.name.trim()) return;
-    setPlayers((prev) => applySportRules(cfg.sport, [
-      ...prev,
-      {
-        id: Date.now(),
-        name: manualP.name.trim(),
-        role: manualP.role,
-        country: manualP.country,
-        nat: '🌍',
-        tier: 'Tier 5',
-        base: manualP.base,
-        img: makeInitials(manualP.name),
-      },
-    ]));
-    setShowManualForm(false);
-    setManualP({
-      name: '',
-      role: roleOptions[0],
-      country: manualP.country,
-      base: 50,
+    setPlayers((prev) => {
+      const newP = { id: Date.now(), name: manualP.name.trim(), role: manualP.role, country: manualP.country, nat: '🌍', tier: 'Tier 5', base: manualP.base, img: makeInitials(manualP.name) };
+      if (!isCustomPool) { setIsCustomPool(true); return applySportRules(cfg.sport, [newP]); }
+      return applySportRules(cfg.sport, [...prev, newP]);
     });
+    setShowManualForm(false);
+    setManualP({ name: '', role: roleOptions[0], country: manualP.country, base: 50 });
   }
 
   async function onExcel(file: File) {
-    setFLoad(true);
-    setFMsg('⏳ Reading Excel…');
+    setFLoad(true); setFMsg('⏳ Reading Excel…');
     try {
       type XlsxModule = typeof import('xlsx');
       const xlsxModule = (await import('xlsx')) as XlsxModule & { default?: XlsxModule };
@@ -289,52 +204,35 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
         }))
         .filter((player) => player.name);
 
-      setPlayers((prev) => applySportRules(cfg.sport, [...prev, ...parsedPlayers]));
-      setFMsg(`✅ Added ${parsedPlayers.length} players from Excel`);
-    } catch (e: unknown) {
-      setFMsg(`❌ ${e instanceof Error ? e.message : 'Error reading file'}`);
-    }
-    setFLoad(false);
-    if (xlRef.current) xlRef.current.value = '';
+      setPlayers((prev) => {
+        if (!isCustomPool) { setIsCustomPool(true); return applySportRules(cfg.sport, parsedPlayers); }
+        return applySportRules(cfg.sport, [...prev, ...parsedPlayers]);
+      });
+      setFMsg(`✅ Added ${parsedPlayers.length} custom players`);
+    } catch (e: unknown) { setFMsg(`❌ ${e instanceof Error ? e.message : 'Error reading file'}`); }
+    setFLoad(false); if (xlRef.current) xlRef.current.value = '';
   }
 
   async function onPDF(file: File) {
-    setFLoad(true);
-    setFMsg('⏳ AI reading PDF…');
+    setFLoad(true); setFMsg('⏳ AI reading PDF…');
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+        const reader = new FileReader(); reader.onload = () => resolve((reader.result as string).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file);
       });
-
-      const response = await fetch('/api/parse-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64 }),
-      });
+      const response = await fetch('/api/parse-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64 }) });
       const data = await response.json();
       if (data.error) throw new Error(data.error);
-      setPlayers((prev) => applySportRules(cfg.sport, [...prev, ...data.players]));
+      
+      setPlayers((prev) => {
+        if (!isCustomPool) { setIsCustomPool(true); return applySportRules(cfg.sport, data.players); }
+        return applySportRules(cfg.sport, [...prev, ...data.players]);
+      });
       setFMsg(`✅ Added ${data.players.length} players from PDF`);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error';
-      setFMsg(
-        msg.includes('API_KEY')
-          ? '⚠️ Add ANTHROPIC_API_KEY to .env.local to enable PDF parsing.'
-          : `❌ ${msg}`
-      );
-    }
-    setFLoad(false);
-    if (pdfRef.current) pdfRef.current.value = '';
+    } catch (e: unknown) { setFMsg(e instanceof Error && e.message.includes('API_KEY') ? '⚠️ Add ANTHROPIC_API_KEY to .env.local to enable PDF parsing.' : `❌ ${e instanceof Error ? e.message : 'Error'}`); }
+    setFLoad(false); if (pdfRef.current) pdfRef.current.value = '';
   }
 
-  const stepList = [
-    { n: 1, l: 'Setup' },
-    { n: 2, l: 'Players' },
-    { n: 3, l: 'Launch' },
-  ];
+  const stepList = [ { n: 1, l: 'Setup' }, { n: 2, l: 'Players' }, { n: 3, l: 'Launch' } ];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -348,27 +246,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
         <div style={{ width: '100%', maxWidth: 720 }}>
           <div style={{ display: 'flex', gap: 3, marginBottom: 28, background: 'var(--bg2)', borderRadius: 9, padding: 3, border: '1px solid var(--bd)' }}>
             {stepList.map((item) => (
-              <button
-                key={item.n}
-                onClick={() => {
-                  if (item.n < step) setStep(item.n);
-                }}
-                style={{
-                  flex: 1,
-                  padding: 8,
-                  borderRadius: 7,
-                  border: 'none',
-                  cursor: item.n <= step ? 'pointer' : 'default',
-                  background: step === item.n ? 'var(--g)' : 'transparent',
-                  color: step === item.n ? '#000' : step > item.n ? 'var(--t2)' : 'var(--t3)',
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  letterSpacing: 0.5,
-                  textTransform: 'uppercase',
-                  transition: 'all .2s',
-                }}
-              >
+              <button key={item.n} onClick={() => { if (item.n < step) setStep(item.n); }} style={{ flex: 1, padding: 8, borderRadius: 7, border: 'none', cursor: item.n <= step ? 'pointer' : 'default', background: step === item.n ? 'var(--g)' : 'transparent', color: step === item.n ? '#000' : step > item.n ? 'var(--t2)' : 'var(--t3)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: 0.5, textTransform: 'uppercase', transition: 'all .2s' }}>
                 {item.n}. {item.l}
               </button>
             ))}
@@ -386,9 +264,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <Field label="Sport">
                       <select className="inp" value={cfg.sport} onChange={(e) => handleSportChange(e.target.value)}>
-                        {SPORT_OPTIONS.map((sport) => (
-                          <option key={sport}>{sport}</option>
-                        ))}
+                        {SPORT_OPTIONS.map((sport) => <option key={sport}>{sport}</option>)}
                       </select>
                     </Field>
                     <Field label="Tournament">
@@ -427,22 +303,12 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                         </Field>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <button className="btn bs bsm" type="button" onClick={() => hostPhotoRef.current?.click()}>Upload Logo</button>
-                          {hostTeamPhoto && (
-                            <button className="btn bs bsm" type="button" onClick={() => setHostTeamPhoto(null)}>Remove Logo</button>
-                          )}
+                          {hostTeamPhoto && <button className="btn bs bsm" type="button" onClick={() => setHostTeamPhoto(null)}>Remove Logo</button>}
                         </div>
-                        <input
-                          ref={hostPhotoRef}
-                          type="file"
-                          accept="image/*"
-                          style={{ display: 'none' }}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
+                        <input ref={hostPhotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
+                            const file = e.target.files?.[0]; if (!file) return;
                             const reader = new FileReader();
-                            reader.onload = (event) => {
-                              setHostTeamPhoto((event.target?.result as string) || null);
-                            };
+                            reader.onload = (event) => { setHostTeamPhoto((event.target?.result as string) || null); };
                             reader.readAsDataURL(file);
                           }}
                         />
@@ -470,9 +336,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                 <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 2, marginBottom: 12 }}>🔍 FETCH FROM WEB / AI</div>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                   <input className="inp" value={sq} onChange={(e) => setSq(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doSearch(); }} placeholder="Player name or https://en.wikipedia.org/wiki/..." />
-                  <button className="btn bp bsm" onClick={doSearch} disabled={sLoad} style={{ flexShrink: 0 }}>
-                    {sLoad ? <Spinner /> : 'Search'}
-                  </button>
+                  <button className="btn bp bsm" onClick={doSearch} disabled={sLoad} style={{ flexShrink: 0 }}>{sLoad ? <Spinner /> : 'Search'}</button>
                 </div>
                 <button className="btn bs bsm" onClick={() => setShowManualForm(true)} style={{ marginBottom: sErr || sRes.length > 0 || showManualForm ? 10 : 0 }}>＋ Add Player Manually</button>
 
@@ -482,9 +346,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <input className="inp" placeholder="Player Name" value={manualP.name} onChange={(e) => setManualP({ ...manualP, name: e.target.value })} />
                       <select className="inp" value={manualP.role} onChange={(e) => setManualP({ ...manualP, role: e.target.value })}>
-                        {roleOptions.map((role) => (
-                          <option key={role}>{role}</option>
-                        ))}
+                        {roleOptions.map((role) => <option key={role}>{role}</option>)}
                       </select>
                       <input className="inp" placeholder="Country" value={manualP.country} onChange={(e) => setManualP({ ...manualP, country: e.target.value })} />
                       <input className="inp" type="number" placeholder="Base Price (Lakhs)" value={manualP.base} onChange={(e) => setManualP({ ...manualP, base: parseInt(e.target.value, 10) || 50 })} />
@@ -521,9 +383,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                 <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 2, marginBottom: 12 }}>📁 UPLOAD FILE</div>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <button className="btn bs" onClick={() => xlRef.current?.click()} disabled={fLoad} style={{ flex: 1 }}>📊 Upload Excel (.xlsx / .csv)</button>
-                  <button className="btn bs" onClick={() => pdfRef.current?.click()} disabled={fLoad} style={{ flex: 1 }}>
-                    {fLoad ? <Spinner /> : '📄 Upload PDF (AI)'}
-                  </button>
+                  <button className="btn bs" onClick={() => pdfRef.current?.click()} disabled={fLoad} style={{ flex: 1 }}>{fLoad ? <Spinner /> : '📄 Upload PDF (AI)'}</button>
                 </div>
                 <input ref={xlRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) onExcel(e.target.files[0]); }} />
                 <input ref={pdfRef} type="file" accept=".pdf" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) onPDF(e.target.files[0]); }} />
@@ -532,17 +392,13 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                     {fMsg}
                   </div>
                 )}
-                <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>Excel columns: Name, Role, Country, Base (price in ₹L). PDF is parsed by AI (requires ANTHROPIC_API_KEY in .env.local).</p>
+                <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>Uploading your own list overrides the default recommendations. Excel columns: Name, Role, Country, Base.</p>
               </div>
 
               <div className="card" style={{ padding: 18 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 2 }}>
-                    PLAYER POOL
-                  </div>
-                  <span style={{ color: 'var(--g)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, fontSize: 14 }}>
-                    {cfg.sport} · {players.length} players
-                  </span>
+                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 2 }}>PLAYER POOL</div>
+                  <span style={{ color: 'var(--g)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, fontSize: 14 }}>{cfg.sport} · {players.length} players</span>
                 </div>
                 <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
                   {players.map((player, index) => (
@@ -567,19 +423,13 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
           {step === 3 && (() => {
             const getScheduleTs = () => new Date(`${scheduledDate}T${scheduledTime}`).getTime();
             const isScheduleValid = launchMode === 'now' || (clientNow !== null && getScheduleTs() > clientNow + 60000);
-            const scheduleLabel = launchMode === 'schedule'
-              ? new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })
-              : '';
+            const scheduleLabel = launchMode === 'schedule' ? new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 
             const presets = (() => {
-              const today = new Date();
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
+              const today = new Date(); const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
               const formatDate = (date: Date) => date.toISOString().split('T')[0];
               return [
-                { label: '☀️ Today 7 AM', date: formatDate(today), time: '07:00' },
-                { label: '🌙 Today 8 PM', date: formatDate(today), time: '20:00' },
-                { label: '🌅 Tomorrow 10 AM', date: formatDate(tomorrow), time: '10:00' },
+                { label: '☀️ Today 7 AM', date: formatDate(today), time: '07:00' }, { label: '🌙 Today 8 PM', date: formatDate(today), time: '20:00' }, { label: '🌅 Tomorrow 10 AM', date: formatDate(tomorrow), time: '10:00' },
               ].filter((preset) => new Date(`${preset.date}T${preset.time}`).getTime() > Date.now() + 60000);
             })();
 
@@ -593,19 +443,10 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                     <div style={{ color: 'var(--t3)', fontSize: 12, marginTop: 5 }}>Share this code with your friends to join</div>
                   </div>
 
-                  {launchErr && (
-                    <div style={{ fontSize: 13, padding: '9px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: 'var(--re)', border: '1px solid rgba(239,68,68,0.2)', marginBottom: 14 }}>
-                      ⚠️ {launchErr}
-                    </div>
-                  )}
+                  {launchErr && <div style={{ fontSize: 13, padding: '9px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: 'var(--re)', border: '1px solid rgba(239,68,68,0.2)', marginBottom: 14 }}>⚠️ {launchErr}</div>}
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20, textAlign: 'left' }}>
-                    {[
-                      ['🏏', cfg.sport],
-                      ['💰', `₹${cfg.budget}L per team`],
-                      ['📋', `${players.length} players`],
-                      ['⏱️', '30s timer · +15s per bid'],
-                    ].map(([icon, value]) => (
+                    {[ ['🏏', cfg.sport], ['💰', `₹${cfg.budget}L per team`], ['📋', `${players.length} players`], ['⏱️', '30s timer · +15s per bid'] ].map(([icon, value]) => (
                       <div key={value} style={{ background: 'var(--bg3)', padding: '10px 13px', borderRadius: 8, border: '1px solid var(--bd)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, color: 'var(--t1)', fontSize: 13 }}>
                         {icon} {value}
                       </div>
@@ -614,63 +455,17 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
 
                   <div style={{ marginBottom: 18 }}>
                     <div style={{ display: 'flex', gap: 3, background: 'var(--bg2)', borderRadius: 9, padding: 3, border: '1px solid var(--bd)', marginBottom: 14 }}>
-                      <button
-                        onClick={() => setLaunchMode('now')}
-                        style={{
-                          flex: 1,
-                          padding: '10px 14px',
-                          borderRadius: 7,
-                          border: 'none',
-                          cursor: 'pointer',
-                          background: launchMode === 'now' ? 'var(--g)' : 'transparent',
-                          color: launchMode === 'now' ? '#000' : 'var(--t3)',
-                          fontFamily: "'Rajdhani', sans-serif",
-                          fontWeight: 700,
-                          fontSize: 14,
-                          letterSpacing: 0.5,
-                          textTransform: 'uppercase',
-                          transition: 'all .25s',
-                        }}
-                      >
-                        🚀 Launch Now
-                      </button>
-                      <button
-                        onClick={() => setLaunchMode('schedule')}
-                        style={{
-                          flex: 1,
-                          padding: '10px 14px',
-                          borderRadius: 7,
-                          border: 'none',
-                          cursor: 'pointer',
-                          background: launchMode === 'schedule' ? 'var(--am)' : 'transparent',
-                          color: launchMode === 'schedule' ? '#000' : 'var(--t3)',
-                          fontFamily: "'Rajdhani', sans-serif",
-                          fontWeight: 700,
-                          fontSize: 14,
-                          letterSpacing: 0.5,
-                          textTransform: 'uppercase',
-                          transition: 'all .25s',
-                        }}
-                      >
-                        🕐 Schedule
-                      </button>
+                      <button onClick={() => setLaunchMode('now')} style={{ flex: 1, padding: '10px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: launchMode === 'now' ? 'var(--g)' : 'transparent', color: launchMode === 'now' ? '#000' : 'var(--t3)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', transition: 'all .25s' }}>🚀 Launch Now</button>
+                      <button onClick={() => setLaunchMode('schedule')} style={{ flex: 1, padding: '10px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: launchMode === 'schedule' ? 'var(--am)' : 'transparent', color: launchMode === 'schedule' ? '#000' : 'var(--t3)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, letterSpacing: 0.5, textTransform: 'uppercase', transition: 'all .25s' }}>🕐 Schedule</button>
                     </div>
 
                     {launchMode === 'schedule' && (
                       <div style={{ animation: 'fadeUp .3s ease', textAlign: 'left' }}>
                         <div className="card" style={{ padding: 18, border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.04)' }}>
-                          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, fontWeight: 700, color: 'var(--am)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>
-                            📅 Schedule Auction Start
-                          </div>
+                          <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, fontWeight: 700, color: 'var(--am)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>📅 Schedule Auction Start</div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                            <div>
-                              <Lbl>Date</Lbl>
-                              <input type="date" className="inp" value={scheduledDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setScheduledDate(e.target.value)} style={{ colorScheme: 'dark' }} />
-                            </div>
-                            <div>
-                              <Lbl>Time</Lbl>
-                              <input type="time" className="inp" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ colorScheme: 'dark' }} />
-                            </div>
+                            <div><Lbl>Date</Lbl><input type="date" className="inp" value={scheduledDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setScheduledDate(e.target.value)} style={{ colorScheme: 'dark' }} /></div>
+                            <div><Lbl>Time</Lbl><input type="time" className="inp" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} style={{ colorScheme: 'dark' }} /></div>
                           </div>
 
                           {presets.length > 0 && (
@@ -678,19 +473,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                               <Lbl>Quick Select</Lbl>
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                 {presets.map((preset) => (
-                                  <button
-                                    key={preset.label}
-                                    className="btn bs bsm"
-                                    onClick={() => {
-                                      setScheduledDate(preset.date);
-                                      setScheduledTime(preset.time);
-                                    }}
-                                    style={{
-                                      background: scheduledDate === preset.date && scheduledTime === preset.time ? 'rgba(245,158,11,0.15)' : undefined,
-                                      borderColor: scheduledDate === preset.date && scheduledTime === preset.time ? 'var(--am)' : undefined,
-                                      color: scheduledDate === preset.date && scheduledTime === preset.time ? 'var(--am)' : undefined,
-                                    }}
-                                  >
+                                  <button key={preset.label} className="btn bs bsm" onClick={() => { setScheduledDate(preset.date); setScheduledTime(preset.time); }} style={{ background: scheduledDate === preset.date && scheduledTime === preset.time ? 'rgba(245,158,11,0.15)' : undefined, borderColor: scheduledDate === preset.date && scheduledTime === preset.time ? 'var(--am)' : undefined, color: scheduledDate === preset.date && scheduledTime === preset.time ? 'var(--am)' : undefined }}>
                                     {preset.label}
                                   </button>
                                 ))}
@@ -699,69 +482,27 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
                           )}
 
                           <div style={{ background: 'var(--bg2)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--bd)', textAlign: 'center' }}>
-                            <div style={{ fontSize: 11, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
-                              Auction will auto-start at
-                            </div>
-                            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 26, letterSpacing: 2, color: isScheduleValid ? 'var(--am)' : 'var(--re)' }}>
-                              {isScheduleValid ? scheduleLabel : '⚠️ Select a future time'}
-                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>Auction will auto-start at</div>
+                            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 26, letterSpacing: 2, color: isScheduleValid ? 'var(--am)' : 'var(--re)' }}>{isScheduleValid ? scheduleLabel : '⚠️ Select a future time'}</div>
                           </div>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <button
-                    className="btn bp"
-                    disabled={launching || !hostTeamName.trim() || (launchMode === 'schedule' && !isScheduleValid)}
-                    style={{
-                      width: '100%',
-                      fontSize: 18,
-                      padding: 15,
-                      letterSpacing: 2,
-                      animation: launchMode === 'schedule' && !isScheduleValid ? 'none' : 'glow 2s infinite',
-                      background: launchMode === 'schedule' ? 'var(--am)' : undefined,
-                      boxShadow: launchMode === 'schedule' ? '0 4px 14px 0 rgba(245,158,11,0.15)' : undefined,
-                    }}
+                  <button className="btn bp" disabled={launching || !hostTeamName.trim() || (launchMode === 'schedule' && !isScheduleValid)} style={{ width: '100%', fontSize: 18, padding: 15, letterSpacing: 2, animation: launchMode === 'schedule' && !isScheduleValid ? 'none' : 'glow 2s infinite', background: launchMode === 'schedule' ? 'var(--am)' : undefined, boxShadow: launchMode === 'schedule' ? '0 4px 14px 0 rgba(245,158,11,0.15)' : undefined }}
                     onClick={async () => {
-                      setLaunching(true);
-                      setLaunchErr('');
+                      setLaunching(true); setLaunchErr('');
                       try {
                         const scheduledAt = launchMode === 'schedule' ? getScheduleTs() : null;
-                        const teams = buildDefaultTeams(
-                          cfg.participants,
-                          hostTeamName.trim() || 'Host Team',
-                          hostTeamPhoto
-                        );
-
-                        const res = await fetch('/api/rooms', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            roomId,
-                            name: cfg.name,
-                            sport: cfg.sport,
-                            tournament: cfg.tournament,
-                            participants: cfg.participants,
-                            budget: cfg.budget,
-                            squadSize: cfg.squadSize,
-                            enableBots: cfg.enableBots,
-                            teams,
-                            players,
-                            hostId: userId,
-                            scheduledAt,
-                          }),
-                        });
+                        const teams = buildDefaultTeams(cfg.participants, hostTeamName.trim() || 'Host Team', hostTeamPhoto);
+                        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomId, name: cfg.name, sport: cfg.sport, tournament: cfg.tournament, participants: cfg.participants, budget: cfg.budget, squadSize: cfg.squadSize, enableBots: cfg.enableBots, teams, players, hostId: userId, scheduledAt }) });
                         const data = await res.json();
                         if (data.error) throw new Error(data.error);
                         onLaunch(data.room.id, 'you', hostTeamName.trim() || 'Host Team');
-                      } catch (e: unknown) {
-                        setLaunchErr(e instanceof Error ? e.message : 'Failed to launch room');
-                      } finally {
-                        setLaunching(false);
-                      }
-                    }}
-                  >
+                      } catch (e: unknown) { setLaunchErr(e instanceof Error ? e.message : 'Failed to launch room'); } 
+                      finally { setLaunching(false); }
+                    }}>
                     {launching ? 'CREATING ROOM...' : launchMode === 'schedule' ? '🕐 SCHEDULE AUCTION' : '🚀 LAUNCH AUCTION'}
                   </button>
                 </div>

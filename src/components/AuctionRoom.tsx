@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react/no-unescaped-entities */
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image'; // <--- Next.js Image Component Imported
+import Image from 'next/image';
 import { Player } from '@/lib/types';
 import { ROLE_COLORS } from '@/lib/data';
 import Avatar from '@/components/ui/Avatar';
@@ -32,6 +32,20 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'allteams', label: '🏆 All Teams' },
   { id: 'analytics', label: '📊 Analytics' },
 ];
+
+const FLAGS: Record<string, string> = {
+  'Argentina': '🇦🇷', 'France': '🇫🇷', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Brazil': '🇧🇷',
+  'Spain': '🇪🇸', 'Germany': '🇩🇪', 'Portugal': '🇵🇹', 'Netherlands': '🇳🇱',
+  'Italy': '🇮🇹', 'Belgium': '🇧🇪', 'Uruguay': '🇺🇾', 'Croatia': '🇭🇷',
+  'Morocco': '🇲🇦', 'Colombia': '🇨🇴', 'USA': '🇺🇸', 'Canada': '🇨🇦',
+  'Mexico': '🇲🇽', 'Switzerland': '🇨🇭', 'Japan': '🇯🇵', 'Senegal': '🇸🇳',
+  'South Korea': '🇰🇷', 'Poland': '🇵🇱', 'Saudi Arabia': '🇸🇦', 'Australia': '🇦🇺',
+  'Ecuador': '🇪🇨', 'Sweden': '🇸🇪', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Norway': '🇳🇴',
+  'Wales': '🏴󠁧󠁢󠁷󠁬󠁳󠁿', 'Denmark': '🇩🇰', 'Serbia': '🇷🇸', 'Ghana': '🇬🇭',
+  'India': '🇮🇳', 'New Zealand': '🇳🇿', 'South Africa': '🇿🇦',
+  'Pakistan': '🇵🇰', 'Sri Lanka': '🇱🇰', 'West Indies': '🌴', 'Bangladesh': '🇧🇩', 'Afghanistan': '🇦🇫'
+};
+const getFlag = (country: string) => FLAGS[country] || '🏳️';
 
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
 
@@ -68,24 +82,35 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     return roomState?.enableBots ? '🤖 CPU Bot' : '🪑 Open slot';
   };
 
-  const handleDownloadResults = () => {
+  const handleDownloadFullReport = () => {
     if (!roomState) return;
-    const rows = [['Team Name', 'Player Name', 'Role', 'Country', 'Sold Price (₹L)']];
+    const rows = [['Team Name', 'Owner', 'Total Budget (₹L)', 'Spent (₹L)', 'Remaining (₹L)', 'Player Name', 'Role', 'Country', 'Base Price (₹L)', 'Sold Price (₹L)']];
+    
     toArr(roomState.participants).forEach((team: any) => {
+      const budget = team.budget || 0;
+      const spent = team.spent || 0;
+      const remaining = budget - spent;
+      const ownerName = team.ownerId === userId ? `${userName} (You)` : team.ownerId ? 'Connected User' : 'Bot/Empty';
+
       if (!team.squad || team.squad.length === 0) {
-        rows.push([team.name, 'No players', '', '', '']);
+        rows.push([team.name, ownerName, String(budget), String(spent), String(remaining), 'No players', '', '', '', '']);
         return;
       }
+      
       team.squad.forEach((player: any) => {
-        rows.push([team.name, player.name, player.role, player.country, String(player.soldPrice ?? '')]);
+        rows.push([
+          team.name, ownerName, String(budget), String(spent), String(remaining),
+          player.name, player.role, player.country || player.nat, String(player.base), String(player.soldPrice ?? '')
+        ]);
       });
     });
+
     const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${roomState.id.toLowerCase()}-results.csv`;
+    link.download = `${roomState.name.replace(/\s+/g, '_')}_Full_Report.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -113,7 +138,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   useEffect(() => {
     let mounted = true;
     const timer = setInterval(() => {
-      if (roomState && roomState.endsAt) {
+      if (roomState && roomState.endsAt && roomState.phase !== 'paused') {
         const endsAtMs = new Date(roomState.endsAt).getTime();
         const left = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000));
         
@@ -171,34 +196,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   }, [roomState?.phase]);
 
   useEffect(() => {
-    if (!roomState || !roomState.enableBots || roomState.phase !== 'bidding') return;
-    if (roomState.hostId !== userId) return; 
-    if (timeLeft <= 2) return; 
-
-    const bots = toArr(roomState.participants).filter((p: any) => !p.ownerId);
-    if (bots.length === 0) return;
-
-    const botTimer = setTimeout(() => {
-      if (roomState.endsAt && (roomState.endsAt - Date.now() < 2000)) return;
-
-      const bot = bots[Math.floor(Math.random() * bots.length)];
-      if (roomState.currentBidder === bot.id) return;
-      if (roomState.currentBid >= 150) return; 
-      
-      const nextBid = roomState.currentBid + 10;
-      if ((bot.spent || 0) + nextBid <= (bot.budget || 0)) {
-        fetch(`/api/rooms/${roomId}/action`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: { type: 'BID', bidder: bot.id, amount: 10 }, userId }),
-        }).catch(() => {});
-      }
-    }, Math.floor(Math.random() * 3000) + 2000);
-
-    return () => clearTimeout(botTimer);
-  }, [roomState?.currentBid, roomState?.phase, timeLeft]);
-
-  useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [roomState?.chat]);
 
@@ -227,73 +224,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     if (roomState?.phase === 'sold') playSoldSound();
   }, [roomState?.phase]);
 
-  async function handleStartAuction() {
-    if (!roomState || roomState.phase !== 'lobby' || submitting) return;
+  async function performAction(actionType: string, payload: any = {}) {
+    if (submitting) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/rooms/${roomId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: { type: 'START' }, userId }),
-      });
-      const data = await res.json();
-      if (data.error) alert(data.error);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleBid(increment: number) {
-    if (!roomState || roomState.phase !== 'bidding' || submitting) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/rooms/${roomId}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: { type: 'BID', bidder: teamId, amount: increment }, userId }),
-      });
-      const data = await res.json();
-      if (data.error) alert(data.error);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleSkip() {
-    if (!roomState || roomState.phase !== 'bidding' || submitting) return;
-    const msg = roomState.currentBidder
-      ? 'Skip this player? The current standing bid will be discarded and the player marked unsold.'
-      : 'Skip this player? With no bids placed, they will be marked unsold and the auction moves on.';
-    if (!confirm(msg)) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/rooms/${roomId}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: { type: 'SKIP' }, userId }),
-      });
-      const data = await res.json();
-      if (data.error) alert(data.error);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handlePass() {
-    if (!roomState || roomState.phase !== 'bidding' || submitting) return;
-    if (roomState.currentBidder === teamId) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/rooms/${roomId}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: { type: 'PASS', bidder: teamId }, userId }),
+        body: JSON.stringify({ action: { type: actionType, ...payload }, userId }),
       });
       const data = await res.json();
       if (data.error) alert(data.error);
@@ -308,15 +246,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
     if (!chatMsg.trim() || !roomState) return;
     const msgToSend = chatMsg.trim();
     setChatMsg(''); 
-    try {
-      await fetch(`/api/rooms/${roomId}/action`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: { type: 'CHAT', msg: msgToSend, user: userName || 'Guest' }, userId }),
-      });
-    } catch (err) {
-      console.error(err);
-    }
+    await performAction('CHAT', { msg: msgToSend, user: userName || 'Guest' });
   }
 
   if (notFound) {
@@ -356,7 +286,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-        {/* MOBILE CSS INJECTION */}
         <style dangerouslySetInnerHTML={{__html: `
           .lobby-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; max-width: 1100px; width: 100%; margin: 0 auto; padding: 24px; }
           .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -369,14 +298,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
         <div className="header-bar-lobby" style={{ padding: '13px 36px', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Image 
-              src="/kolacommunications.svg" 
-              alt="Kola Communications Logo" 
-              width={80} 
-              height={24} 
-              style={{ height: 24, width: 'auto', objectFit: 'contain' }} 
-              priority 
-            />
+            <Image src="/kolacommunications.svg" alt="Kola Logo" width={80} height={24} style={{ height: 24, width: 'auto', objectFit: 'contain' }} priority />
             <span style={{ color: 'var(--t3)' }}>/</span>
             <span style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, color: 'var(--t2)' }}>Lobby - {roomState.name}</span>
           </div>
@@ -467,14 +389,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                       )}
                     </div>
                     {isHost && (
-                      <button className="btn bp" onClick={handleStartAuction} disabled={submitting} style={{ fontSize: 14, padding: 12, width: '100%', marginTop: 4 }}>
+                      <button className="btn bp" onClick={() => performAction('START')} disabled={submitting} style={{ fontSize: 14, padding: 12, width: '100%', marginTop: 4 }}>
                         {submitting ? 'Starting...' : '🚀 START AUCTION NOW'}
                       </button>
                     )}
                   </div>
                 ) : (
                   isHost ? (
-                    <button className="btn bp" onClick={handleStartAuction} disabled={submitting} style={{ fontSize: 14, padding: 12, width: '100%', marginTop: 8 }}>
+                    <button className="btn bp" onClick={() => performAction('START')} disabled={submitting} style={{ fontSize: 14, padding: 12, width: '100%', marginTop: 8 }}>
                       {submitting ? 'Starting...' : '🚀 START AUCTION'}
                     </button>
                   ) : (
@@ -526,11 +448,10 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden' }}>
-      {/* MOBILE CSS INJECTION */}
       <style dangerouslySetInnerHTML={{__html: `
         .auction-grid { display: flex; flex-direction: row; flex: 1; overflow: hidden; min-height: 0; }
         .auction-sidebar-left { width: 260px; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg2); border-right: 1px solid var(--bd); padding: 12px; gap: 8px; flex-shrink: 0; }
-        .auction-main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 14px; gap: 11px; min-width: 0; }
+        .auction-main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 14px; gap: 11px; min-width: 0; position: relative; }
         .auction-sidebar-right { width: 320px; display: flex; flex-direction: column; overflow: hidden; background: var(--bg2); border-left: 1px solid var(--bd); flex-shrink: 0; }
         .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
         .header-bar-main { border-bottom: 1px solid var(--bd); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 54px; flex-shrink: 0; }
@@ -553,14 +474,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
       <div className="header-bar-main">
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Image 
-            src="/kolacommunications.svg" 
-            alt="Kola Communications Logo" 
-            width={80} 
-            height={22} 
-            style={{ height: 22, width: 'auto', objectFit: 'contain' }} 
-            priority 
-          />
+          <Image src="/kolacommunications.svg" alt="Kola Logo" width={80} height={22} style={{ height: 22, width: 'auto', objectFit: 'contain' }} priority />
           <span className="hide-mobile" style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 6 }}>Code: {roomState.id}</span>
         </div>
         <div className="header-tabs">
@@ -575,6 +489,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, color: 'var(--t3)' }}>
             <span className="hide-mobile">{roomState.playerIdx + 1}/{safePlayers.length} players</span>
           </div>
+          <button className="btn bs bsm" onClick={handleDownloadFullReport} style={{ padding: '4px 10px', background: 'rgba(0,220,114,0.1)', color: 'var(--g)', border: '1px solid rgba(0,220,114,0.2)' }}>📥 Full Report</button>
           <button className="btn bs bsm" onClick={onLeave} style={{ padding: '4px 10px' }}>Leave</button>
         </div>
       </div>
@@ -603,12 +518,8 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--t2)', alignItems: 'center' }}>
-                      <span>
-                        <strong style={{ color: isBidder ? p.color : 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>₹{availLeft(p)}L</strong> left
-                      </span>
-                      <span>
-                        <strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>{squadSafe.length}</strong>/{roomState.squadSize}
-                      </span>
+                      <span><strong style={{ color: isBidder ? p.color : 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>₹{availLeft(p)}L</strong> left</span>
+                      <span><strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, letterSpacing: 1 }}>{squadSafe.length}</strong>/{roomState.squadSize}</span>
                     </div>
                     <div style={{ marginTop: 5, height: 3, background: 'var(--bd2)', borderRadius: 2 }}>
                       <div style={{ height: '100%', width: `${(((p.budget || 0) - availLeft(p)) / (p.budget || 1)) * 100}%`, background: p.color, borderRadius: 2, transition: 'width .4s' }} />
@@ -620,7 +531,27 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
           </div>
 
           <div className="auction-main">
-            {isEnd ? (
+            {/* ADMIN CONTROLS HEADER */}
+            {isHost && (
+              <div style={{ background: 'var(--bg3)', border: '1px solid var(--bd2)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase' }}>👑 Host Controls</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {roomState.phase === 'paused' ? (
+                     <button className="btn bp bsm" onClick={() => performAction('RESUME')} style={{ padding: '4px 12px' }}>▶️ Resume Auction</button>
+                  ) : (
+                     <button className="btn bs bsm" onClick={() => performAction('PAUSE')} disabled={isEnd} style={{ padding: '4px 12px' }}>⏸️ Pause</button>
+                  )}
+                  <button className="btn bs bsm" onClick={() => { if(confirm('End auction completely and download final results?')) performAction('END_AUCTION'); }} style={{ padding: '4px 12px', color: 'var(--re)', borderColor: 'rgba(239,68,68,0.3)' }}>🛑 End Early</button>
+                </div>
+              </div>
+            )}
+
+            {roomState.phase === 'paused' ? (
+               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                 <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 80, letterSpacing: 5, color: 'var(--am)' }}>PAUSED</div>
+                 <div style={{ color: 'var(--t3)', fontSize: 14, fontFamily: "'Rajdhani', sans-serif" }}>The host has temporarily paused the auction.</div>
+               </div>
+            ) : isEnd ? (
               <div key={`end${roomState.playerIdx}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, minHeight: 300 }}>
                 <div key={roomState.phase} className={roomState.phase === 'sold' ? 'anim-stamp' : ''} style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(50px, 8vw, 80px)', letterSpacing: 5, color: roomState.phase === 'sold' ? 'var(--g)' : roomState.phase === 'done' ? 'var(--g)' : 'var(--t3)', textShadow: roomState.phase === 'sold' ? '0 0 44px rgba(0,220,114,.4)' : 'none' }}>
                   {roomState.phase === 'sold' ? 'SOLD!' : roomState.phase === 'done' ? 'AUCTION OVER!' : 'UNSOLD'}
@@ -647,12 +578,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                       {pl.img}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', gap: 6, marginBottom: 5, flexWrap: 'wrap', justifyContent: 'inherit' }}>
-                        <TBadge tier={pl.tier} /><RBadge role={pl.role} />
-                        <span style={{ fontSize: 13 }}>{pl.nat || '🌍'}</span>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 5, flexWrap: 'wrap', justifyContent: 'inherit', alignItems: 'center' }}>
+                         <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--bd)', padding: '2px 8px', borderRadius: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>Tier {pl.tier.replace(/\D/g, '') || pl.tier}</span>
+                         <RBadge role={pl.role} />
+                         <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--bd2)' }}>{getFlag(pl.country || pl.nat)} <span style={{fontSize:11, fontWeight: 700, fontFamily: "'Rajdhani', sans-serif"}}>{pl.country || pl.nat}</span></span>
                       </div>
                       <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, lineHeight: 1 }}>{pl.name}</div>
-                      <div style={{ color: 'var(--t2)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", marginTop: 2 }}>{pl.country}</div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 1 }}>Base</div>
@@ -691,16 +622,9 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   <div style={{ display: 'flex', gap: 8, marginBottom: 9 }}>
                     {[10, 20].map((inc) => (
                       <button key={inc} className="btn bp"
-                        onClick={() => handleBid(inc)}
+                        onClick={() => performAction('BID', { bidder: teamId, amount: inc })}
                         disabled={roomState.phase !== 'bidding' || roomState.currentBidder === teamId || hasPassed || submitting || (me && (me.spent || 0) + roomState.currentBid + inc > (me.budget || 0))}
-                        style={{
-                          flex: 1,
-                          padding: '18px 6px',
-                          fontSize: 24,
-                          fontFamily: "'Bebas Neue', sans-serif",
-                          letterSpacing: 1.5,
-                          borderWidth: 2,
-                        }}>
+                        style={{ flex: 1, padding: '18px 6px', fontSize: 24, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: 1.5, borderWidth: 2 }}>
                         +₹{inc}L
                       </button>
                     ))}
@@ -709,22 +633,9 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   {!isHighBidder && (
                     <button
                       className="btn bs"
-                      onClick={handlePass}
+                      onClick={() => performAction('PASS', { bidder: teamId })}
                       disabled={roomState.phase !== 'bidding' || hasPassed || submitting}
-                      title={hasPassed ? 'You have passed on this player' : 'Pass — opt out of bidding on this player'}
-                      style={{
-                        width: '100%',
-                        marginTop: 9,
-                        padding: '11px 6px',
-                        fontSize: 13,
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontWeight: 700,
-                        letterSpacing: 1,
-                        borderWidth: 2,
-                        borderColor: 'var(--bd2)',
-                        opacity: (hasPassed || roomState.phase !== 'bidding') ? 0.45 : 1,
-                        cursor: (hasPassed || roomState.phase !== 'bidding') ? 'not-allowed' : 'pointer',
-                      }}
+                      style={{ width: '100%', marginTop: 9, padding: '11px 6px', fontSize: 13, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, letterSpacing: 1, borderWidth: 2, borderColor: 'var(--bd2)', opacity: (hasPassed || roomState.phase !== 'bidding') ? 0.45 : 1, cursor: (hasPassed || roomState.phase !== 'bidding') ? 'not-allowed' : 'pointer' }}
                     >
                       {hasPassed ? '🙅 Passed' : '🙅 Pass on this player'}
                     </button>
@@ -732,23 +643,12 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                   {isHost && (
                     <button
                       className="btn bs"
-                      onClick={handleSkip}
-                      disabled={!canSkip || submitting}
-                      title={roomState.currentBidder ? 'Skip — discards the standing bid and moves to the next player' : 'Skip this player and move on (no bids)'}
-                      style={{
-                        width: '100%',
-                        marginTop: 9,
-                        padding: '12px 6px',
-                        fontSize: 14,
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontWeight: 700,
-                        letterSpacing: 1,
-                        borderWidth: 2,
-                        borderColor: 'var(--am)',
-                        color: 'var(--am)',
-                        opacity: canSkip ? 1 : 0.45,
-                        cursor: canSkip ? 'pointer' : 'not-allowed',
+                      onClick={() => {
+                        const msg = roomState.currentBidder ? 'Skip this player? The current standing bid will be discarded.' : 'Skip this player? With no bids, they will be marked unsold.';
+                        if (confirm(msg)) performAction('SKIP');
                       }}
+                      disabled={!canSkip || submitting}
+                      style={{ width: '100%', marginTop: 9, padding: '12px 6px', fontSize: 14, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, letterSpacing: 1, borderWidth: 2, borderColor: 'var(--am)', color: 'var(--am)', opacity: canSkip ? 1 : 0.45, cursor: canSkip ? 'pointer' : 'not-allowed' }}
                     >
                       ⏭️ {roomState.currentBidder ? 'Skip Player (discard bid)' : 'Skip Player — No Bids'}
                     </button>
@@ -766,19 +666,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                           <span><strong style={{ color: 'var(--t1)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1 }}>{(me.squad || []).length}</strong><span style={{ opacity: 0.5 }}>/{roomState.squadSize}</span></span>
                         </div>
                       </div>
-
-                      {(me.squad || []).length > 0 && (
-                        <div style={{ padding: 10, background: 'var(--bg3)', borderRadius: 8, border: '1px solid var(--bd2)' }}>
-                          <div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--t3)', letterSpacing: 1, marginBottom: 6 }}>Your Squad Balance</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {Object.entries((me.squad || []).reduce((acc: Record<string, number>, p: any) => ({ ...acc, [p.role]: (acc[p.role] || 0) + 1 }), {})).map(([r, c]) => (
-                              <span key={r} style={{ fontSize: 12, padding: '6px 12px', background: 'var(--bg2)', borderRadius: 6, border: '1px solid var(--bd)', color: 'var(--t2)', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                                <span style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{r}</span> <strong style={{ color: 'var(--t1)', fontSize: 15 }}>{c as number}</strong>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -804,33 +691,16 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               }
             </div>
 
-            <div
-              className="resizer-bar"
-              style={{ height: 6, cursor: 'row-resize', background: 'var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, userSelect: 'none', transition: 'background 0.2s' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--g)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bd)')}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                const panel = rightPanelRef.current;
-                if (!panel) return;
-                const startY = e.clientY;
-                const startPct = splitPct;
-                const panelH = panel.getBoundingClientRect().height;
-                const onMove = (ev: MouseEvent) => {
-                  const delta = ev.clientY - startY;
-                  const newPct = Math.min(80, Math.max(15, startPct + (delta / panelH) * 100));
-                  setSplitPct(newPct);
-                };
-                const onUp = () => {
-                  document.removeEventListener('mousemove', onMove);
-                  document.removeEventListener('mouseup', onUp);
-                };
-                document.addEventListener('mousemove', onMove);
-                document.addEventListener('mouseup', onUp);
-              }}
-            >
+            <div className="resizer-bar" style={{ height: 6, cursor: 'row-resize', background: 'var(--bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, userSelect: 'none', transition: 'background 0.2s' }} onMouseDown={(e) => {
+                e.preventDefault(); const panel = rightPanelRef.current; if (!panel) return;
+                const startY = e.clientY; const startPct = splitPct; const panelH = panel.getBoundingClientRect().height;
+                const onMove = (ev: MouseEvent) => { setSplitPct(Math.min(80, Math.max(15, startPct + ((ev.clientY - startY) / panelH) * 100))); };
+                const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+                document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+              }}>
               <div style={{ width: 30, height: 2, borderRadius: 1, background: 'var(--t3)' }} />
             </div>
+            
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
               <div ref={chatRef} style={{ flex: 1, overflow: 'auto', padding: 9, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 5 }}>Chat</div>
@@ -842,9 +712,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                 ))}
               </div>
               <div style={{ padding: 7, borderTop: '1px solid var(--bd)', display: 'flex', gap: 6 }}>
-                <input className="inp" placeholder="Chat…" value={chatMsg} onChange={(e) => setChatMsg(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }}
-                  style={{ flex: 1, fontSize: 12, padding: '6px 10px' }} />
+                <input className="inp" placeholder="Chat…" value={chatMsg} onChange={(e) => setChatMsg(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }} style={{ flex: 1, fontSize: 12, padding: '6px 10px' }} />
                 <button className="btn bp bsm" onClick={handleSendChat}>↑</button>
               </div>
             </div>
@@ -853,7 +721,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       )}
 
       {tab === 'myteam' && me && (
-        <div style={{ padding: 22, maxWidth: 900, margin: '0 auto', width: '100%' }}>
+        <div style={{ padding: 22, maxWidth: 900, margin: '0 auto', width: '100%', overflowY: 'auto', maxHeight: 'calc(100vh - 54px)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 1.5, color: 'var(--t1)' }}>SQUAD BUILDER</div>
+          </div>
+
           <div className="stats-grid-4">
             {[
               { l: 'Budget Left', v: `₹${(me.budget || 0) - (me.spent || 0)}L`, c: 'var(--g)' },
@@ -867,15 +739,16 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
               </div>
             ))}
           </div>
+
           {(me.squad || []).length === 0
             ? <div style={{ textAlign: 'center', color: 'var(--t3)', padding: 70, fontFamily: "'Rajdhani', sans-serif", fontSize: 15 }}>No players yet — start bidding!</div>
             : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(185px,1fr))', gap: 10 }}>
               {(me.squad || []).map((p: any, i: number) => (
                 <div key={String(p.id)} className="card hover-lift" style={{ padding: 13, border: `1px solid ${(ROLE_COLORS[p.role] || '#888')}33`, animation: `fadeUp 0.4s ease forwards`, animationDelay: `${i * 0.05}s`, opacity: 0 }}>
-                  <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}><RBadge role={p.role} /><TBadge tier={p.tier} /></div>
+                  <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}><RBadge role={p.role} /><span style={{ fontSize: 9, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--bd)', padding: '2px 6px', borderRadius: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>T{p.tier.replace(/\D/g, '') || p.tier}</span></div>
                   <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 14, color: 'var(--t1)', marginBottom: 2 }}>{p.name}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{p.nat || '🌍'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>{getFlag(p.country || p.nat)} {p.country || p.nat}</span>
                     <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, color: 'var(--g)', letterSpacing: 1 }}>₹{p.soldPrice}L</span>
                   </div>
                 </div>
@@ -886,7 +759,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       )}
 
       {tab === 'allteams' && (
-        <div style={{ padding: 22, maxWidth: 1400, margin: '0 auto', width: '100%', overflowX: 'auto' }}>
+        <div style={{ padding: 22, maxWidth: 1400, margin: '0 auto', width: '100%', overflowX: 'auto', maxHeight: 'calc(100vh - 54px)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
             {safeParticipants.map((t) => (
               <div key={t.id} style={{ border: `1px solid ${t.color}33`, borderRadius: 12, padding: 18, background: 'var(--bg2)' }}>
@@ -906,11 +779,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                           <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 15, color: 'var(--t1)' }}>{p.name}</div>
                           <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                             <RBadge role={p.role} />
-                            <TBadge tier={p.tier} />
+                            <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--bd)', padding: '2px 6px', borderRadius: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>T{p.tier.replace(/\D/g, '') || p.tier}</span>
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 2 }}>{p.nat || '🌍'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 2 }}>{getFlag(p.country || p.nat)}</div>
                           <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: 'var(--g)' }}>₹{p.soldPrice}L</div>
                         </div>
                       </div>
@@ -924,14 +797,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       )}
 
       {tab === 'analytics' && (
-        <div style={{ padding: 22, maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+        <div style={{ padding: 22, maxWidth: 1000, margin: '0 auto', width: '100%', overflowY: 'auto', maxHeight: 'calc(100vh - 54px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
             <div>
               <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, letterSpacing: 2 }}>FINAL RESULTS</div>
               <div style={{ color: 'var(--t3)', fontSize: 12 }}>Download a team-wise list of players from this auction.</div>
             </div>
-            <button className="btn bp" onClick={handleDownloadResults}>
-              Download Results
+            <button className="btn bp" onClick={handleDownloadFullReport}>
+              📥 Download Full Report
             </button>
           </div>
           <div className="stats-grid-4">
@@ -1048,51 +921,14 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
       )}
 
       {launchOverlay !== null && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(5, 7, 14, 0.88)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          zIndex: 9999,
-          color: '#fff',
-          fontFamily: "'Bebas Neue', sans-serif"
-        }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 7, 14, 0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', zIndex: 9999, color: '#fff', fontFamily: "'Bebas Neue', sans-serif" }}>
           <style dangerouslySetInnerHTML={{__html: `
-            @keyframes launchNumber {
-              0% { transform: scale(3.5); opacity: 0; filter: blur(12px); }
-              25% { transform: scale(1); opacity: 1; filter: blur(0); }
-              75% { transform: scale(1); opacity: 1; filter: blur(0); }
-              100% { transform: scale(0.7); opacity: 0; filter: blur(8px); }
-            }
-            .launch-num {
-              font-size: clamp(80px, 15vw, 160px);
-              letter-spacing: 4px;
-              color: var(--g);
-              text-shadow: 0 0 50px rgba(0, 220, 114, 0.6);
-              animation: launchNumber 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-            }
-            .launch-num-go {
-              font-size: clamp(80px, 15vw, 160px);
-              letter-spacing: 4px;
-              color: var(--am);
-              text-shadow: 0 0 50px rgba(245, 158, 11, 0.6);
-              animation: launchNumber 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-            }
+            @keyframes launchNumber { 0% { transform: scale(3.5); opacity: 0; filter: blur(12px); } 25% { transform: scale(1); opacity: 1; filter: blur(0); } 75% { transform: scale(1); opacity: 1; filter: blur(0); } 100% { transform: scale(0.7); opacity: 0; filter: blur(8px); } }
+            .launch-num { font-size: clamp(80px, 15vw, 160px); letter-spacing: 4px; color: var(--g); text-shadow: 0 0 50px rgba(0, 220, 114, 0.6); animation: launchNumber 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+            .launch-num-go { font-size: clamp(80px, 15vw, 160px); letter-spacing: 4px; color: var(--am); text-shadow: 0 0 50px rgba(245, 158, 11, 0.6); animation: launchNumber 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
           `}} />
-          <div style={{ fontSize: 24, letterSpacing: 6, color: 'var(--t3)', textTransform: 'uppercase', marginBottom: 20, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>
-            Prepare to Bid
-          </div>
-          <div key={launchOverlay} className={launchOverlay === 'GO!' ? 'launch-num-go' : 'launch-num'}>
-            {launchOverlay}
-          </div>
+          <div style={{ fontSize: 24, letterSpacing: 6, color: 'var(--t3)', textTransform: 'uppercase', marginBottom: 20, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>Prepare to Bid</div>
+          <div key={launchOverlay} className={launchOverlay === 'GO!' ? 'launch-num-go' : 'launch-num'}>{launchOverlay}</div>
           {safePlayers && safePlayers[roomState.playerIdx] && (
             <div style={{ fontSize: 16, letterSpacing: 2, color: 'var(--t3)', textTransform: 'uppercase', marginTop: 20, textAlign: 'center', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
               First Up: <b style={{ color: '#fff' }}>{safePlayers[roomState.playerIdx].name}</b> ({safePlayers[roomState.playerIdx].role})
