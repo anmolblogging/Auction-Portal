@@ -80,6 +80,45 @@ const modalStyle: CSSProperties = {
   padding: 24,
 };
 
+// Custom Hook to animate the stat numbers seamlessly
+function AnimatedStat({ target, label, suffix = '', prefix = '', decimals = 0, isK = false }: any) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let start = 0;
+    const duration = 2000; // Animation lasts 2 seconds
+    const fps = 60;
+    const increment = target / ((duration / 1000) * fps);
+
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(start);
+      }
+    }, 1000 / fps);
+
+    return () => clearInterval(timer);
+  }, [target]);
+
+  const formatted = isK 
+    ? count.toFixed(decimals) 
+    : Math.floor(count).toLocaleString('en-US');
+
+  return (
+    <div style={{ textAlign: 'center', minWidth: 90 }}>
+      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>
+        {prefix}{formatted}{suffix}
+      </div>
+      <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
 function calculateHybridTier(player: any): number {
   const team = (player.country || player.nationality || '').toLowerCase().trim();
   const position = (player.role || player.position || '').toLowerCase().trim();
@@ -107,26 +146,14 @@ function calculateHybridTier(player: any): number {
 
 function Label({ children }: { children: ReactNode }) {
   return (
-    <label
-      style={{
-        fontFamily: "'Rajdhani', sans-serif",
-        fontSize: 11,
-        fontWeight: 700,
-        color: 'var(--t3)',
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-      }}
-    >
+    <label style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase' }}>
       {children}
     </label>
   );
 }
 
 function formatCreatedAt(createdAt: number) {
-  return new Intl.DateTimeFormat('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(createdAt);
+  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(createdAt);
 }
 
 export default function Landing({
@@ -177,11 +204,21 @@ export default function Landing({
   const [loadingFixtures, setLoadingFixtures] = useState(false);
   const [isFallbackData, setIsFallbackData] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
-
   const [matchGroupFilter, setMatchGroupFilter] = useState('All');
   const [matchTeamFilter, setMatchTeamFilter] = useState('All');
 
+  // Premier League News State
+  const [newsPosts, setNewsPosts] = useState<any[]>([]);
+
   useEffect(() => {
+    // Fetch News Articles from WordPress JSON API
+    fetch('https://premierleaguenewsnow.com/wp-json/wp/v2/posts?per_page=6&_fields=id,title,link')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setNewsPosts(data);
+      })
+      .catch(err => console.error('Failed to load news:', err));
+
     const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
@@ -269,12 +306,7 @@ export default function Landing({
       const res = await fetch(`/api/rooms/${cleanId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          userName: userName.trim(),
-          teamName: teamName.trim(),
-          teamPhoto,
-        }),
+        body: JSON.stringify({ userId, userName: userName.trim(), teamName: teamName.trim(), teamPhoto }),
       });
       
       const text = await res.text();
@@ -296,78 +328,50 @@ export default function Landing({
   }
 
   function handleCloseJoin() {
-    setShowJoin(false);
-    setRoomCode('');
-    setUserName('');
-    setTeamName('');
-    setTeamPhoto(null);
-    setRoomDetails(null);
-    setError('');
+    setShowJoin(false); setRoomCode(''); setUserName(''); setTeamName(''); setTeamPhoto(null); setRoomDetails(null); setError('');
   }
 
   function openLogin(intent: 'nav' | 'host') {
-    setLoginIntent(intent);
-    setLoginError('');
-    setLoginForm({ userId: '', password: '' });
-    setShowLogin(true);
+    setLoginIntent(intent); setLoginError(''); setLoginForm({ userId: '', password: '' }); setShowLogin(true);
   }
 
   function closeLogin() {
-    setShowLogin(false);
-    setLoginError('');
-    setLoginForm({ userId: '', password: '' });
+    setShowLogin(false); setLoginError(''); setLoginForm({ userId: '', password: '' });
   }
 
   function handleHostAccess() {
-    if (authSession) {
-      onStart();
-      return;
-    }
+    if (authSession) { onStart(); return; }
     openLogin('host');
   }
 
   function submitLogin() {
-    if (!loginForm.userId.trim() || !loginForm.password.trim()) {
-      setLoginError('Enter both user ID and password');
-      return;
-    }
-
+    if (!loginForm.userId.trim() || !loginForm.password.trim()) { setLoginError('Enter both user ID and password'); return; }
     try {
       onLogin(loginForm.userId, loginForm.password);
       closeLogin();
-      if (loginIntent === 'host') {
-        onStart();
-      }
+      if (loginIntent === 'host') onStart();
     } catch (e: unknown) {
       setLoginError(e instanceof Error ? e.message : 'Login failed');
     }
   }
 
   function submitManagedUser() {
-    if (!settingsForm.userId.trim() || !settingsForm.password.trim()) {
-      setSettingsError('Add both a user ID and password');
-      return;
-    }
-
+    if (!settingsForm.userId.trim() || !settingsForm.password.trim()) { setSettingsError('Add both a user ID and password'); return; }
     try {
       onCreateUser(settingsForm.userId, settingsForm.password);
-      setSettingsForm({ userId: '', password: '' });
-      setSettingsError('');
+      setSettingsForm({ userId: '', password: '' }); setSettingsError('');
       setSettingsMessage(`User ${settingsForm.userId.trim().toLowerCase()} created and activated`);
     } catch (e: unknown) {
-      setSettingsMessage('');
-      setSettingsError(e instanceof Error ? e.message : 'Failed to create user');
+      setSettingsMessage(''); setSettingsError(e instanceof Error ? e.message : 'Failed to create user');
     }
   }
 
   function handleToggleManagedUser(targetUserId: string, active: boolean) {
     try {
-      onToggleUser(targetUserId);
-      setSettingsError('');
+      onToggleUser(targetUserId); setSettingsError('');
       setSettingsMessage(`${targetUserId} ${active ? 'deactivated' : 'activated'} successfully`);
     } catch (e: unknown) {
-      setSettingsMessage('');
-      setSettingsError(e instanceof Error ? e.message : 'Failed to update user');
+      setSettingsMessage(''); setSettingsError(e instanceof Error ? e.message : 'Failed to update user');
     }
   }
 
@@ -377,26 +381,10 @@ export default function Landing({
     const accurateTier = calculateHybridTier(player);
     const country = player.country || player.nationality || 'Unknown';
     const position = (player.role || player.position || '').toLowerCase();
-
-    const matchesSearch = !searchQuery.trim() || 
-      player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (player.club && player.club.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    let matchesPosition = true;
-    if (filterPosition !== 'All') {
-      matchesPosition = position.includes(filterPosition.toLowerCase());
-    }
-
-    let matchesTier = true;
-    if (filterTier !== 'All') {
-      matchesTier = accurateTier === parseInt(filterTier);
-    }
-
-    let matchesCountry = true;
-    if (filterCountry !== 'All') {
-      matchesCountry = country === filterCountry;
-    }
-
+    const matchesSearch = !searchQuery.trim() || player.name.toLowerCase().includes(searchQuery.toLowerCase()) || (player.club && player.club.toLowerCase().includes(searchQuery.toLowerCase()));
+    let matchesPosition = filterPosition === 'All' ? true : position.includes(filterPosition.toLowerCase());
+    let matchesTier = filterTier === 'All' ? true : accurateTier === parseInt(filterTier);
+    let matchesCountry = filterCountry === 'All' ? true : country === filterCountry;
     return matchesSearch && matchesPosition && matchesTier && matchesCountry;
   });
 
@@ -406,14 +394,8 @@ export default function Landing({
     if (f.status === 'FINISHED' || f.status === 'IN_PLAY') return true; 
     return new Date(f.datetime).getTime() > currentTime; 
   }).filter(f => {
-    let matchesGroup = true;
-    if (matchGroupFilter !== 'All') {
-      matchesGroup = f.stage.toLowerCase().includes(matchGroupFilter.toLowerCase());
-    }
-    let matchesTeam = true;
-    if (matchTeamFilter !== 'All') {
-      matchesTeam = f.team1.toLowerCase() === matchTeamFilter.toLowerCase() || f.team2.toLowerCase() === matchTeamFilter.toLowerCase();
-    }
+    let matchesGroup = matchGroupFilter === 'All' ? true : f.stage.toLowerCase().includes(matchGroupFilter.toLowerCase());
+    let matchesTeam = matchTeamFilter === 'All' ? true : (f.team1.toLowerCase() === matchTeamFilter.toLowerCase() || f.team2.toLowerCase() === matchTeamFilter.toLowerCase());
     return matchesGroup && matchesTeam;
   }).sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
 
@@ -424,70 +406,80 @@ export default function Landing({
     return acc;
   }, {} as Record<string, typeof apiFixtures>);
 
-  const uniqueMatchGroups = Array.from(new Set(apiFixtures.map(f => {
-    const parts = f.stage.split(' - ');
-    return parts[1] || null;
-  }).filter(Boolean))).sort() as string[];
+  const uniqueMatchGroups = Array.from(new Set(apiFixtures.map(f => f.stage.split(' - ')[1] || null).filter(Boolean))).sort() as string[];
+  const uniqueMatchTeams = Array.from(new Set([...apiFixtures.map(f => f.team1), ...apiFixtures.map(f => f.team2)])).filter(t => t && t !== 'TBD').sort() as string[];
 
-  const uniqueMatchTeams = Array.from(new Set([
-    ...apiFixtures.map(f => f.team1),
-    ...apiFixtures.map(f => f.team2)
-  ])).filter(t => t && t !== 'TBD').sort() as string[];
+  const QUIZ_CATEGORIES = ['General World Cup', 'Argentina', 'Brazil', 'France', 'Germany', 'England', 'Spain', 'Portugal', 'Netherlands', 'Belgium', 'Croatia', 'Sweden', 'Scotland', 'Norway'];
 
-  const QUIZ_CATEGORIES = [
-    'General World Cup', 'Argentina', 'Brazil', 'France', 'Germany', 'England', 'Spain', 'Portugal',
-    'Netherlands', 'Belgium', 'Croatia', 'Sweden', 'Scotland', 'Norway'
-  ];
+  // Multiply the news array for a seamless infinite scroll effect
+  const marqueeItems = [...newsPosts, ...newsPosts, ...newsPosts, ...newsPosts];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <style dangerouslySetInnerHTML={{__html: `
+        /* STICKY HEADER SYSTEM */
+        .global-sticky-header {
+          position: sticky;
+          top: 0;
+          z-index: 1000;
+          background: rgba(5, 7, 14, 0.95);
+          backdrop-filter: blur(12px);
+          border-bottom: 1px solid var(--bd);
+        }
+
+        /* DYNAMIC NEWS MARQUEE */
+        .marquee-wrapper {
+          background: var(--g);
+          color: #05070E;
+          overflow: hidden;
+          display: flex;
+          white-space: nowrap;
+          padding: 8px 0;
+          position: relative;
+        }
+        .marquee-track {
+          display: flex;
+          animation: marqueeScroll 50s linear infinite;
+        }
+        .marquee-track:hover {
+          animation-play-state: paused;
+        }
+        .marquee-item {
+          font-family: 'Rajdhani', sans-serif;
+          font-weight: 700;
+          font-size: 13px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin: 0 40px;
+        }
+        .marquee-item a {
+          color: #05070E;
+          text-decoration: none;
+          transition: opacity 0.2s;
+        }
+        .marquee-item a:hover {
+          opacity: 0.7;
+        }
+        @keyframes marqueeScroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+
         .landing-body { flex-direction: row; }
         .landing-sidebar { width: clamp(260px, 25vw, 340px); border-right: 1px solid var(--bd); padding: 24px 20px; overflow-y: auto; background: rgba(0,0,0,0.15); }
-        .nav-container { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px clamp(16px,4vw,40px); border-bottom: 1px solid var(--bd); }
+        .nav-container { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px clamp(16px,4vw,40px); }
         .nav-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
         .nav-link { background: transparent; border: none; color: var(--t2); font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; }
         .nav-link:hover { color: var(--t1); background: var(--bg3); }
         
-        .squads-matrix {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 24px;
-          width: 100%;
-          margin-top: 20px;
-        }
-
-        .filter-bar {
-          display: grid;
-          grid-template-columns: 2fr 1fr 1fr 1fr;
-          gap: 12px;
-          background: var(--bg3);
-          border: 1px solid var(--bd2);
-          padding: 14px;
-          border-radius: 10px;
-          margin-bottom: 20px;
-        }
-
-        .fixtures-container-split {
-          display: grid;
-          grid-template-columns: 1fr 320px;
-          gap: 24px;
-          align-items: start;
-        }
-
-        .standings-sidebar-widget {
-          background: var(--bg2);
-          border: 1px solid var(--bd2);
-          border-radius: 12px;
-          padding: 16px;
-        }
-
-        .mini-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 20px;
-          font-size: 13px;
-        }
+        .squads-matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; width: 100%; margin-top: 20px; }
+        .filter-bar { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; background: var(--bg3); border: 1px solid var(--bd2); padding: 14px; border-radius: 10px; margin-bottom: 20px; }
+        .fixtures-container-split { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+        .standings-sidebar-widget { background: var(--bg2); border: 1px solid var(--bd2); border-radius: 12px; padding: 16px; }
+        .mini-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
         .mini-table th { text-align: left; padding: 6px 4px; color: var(--t3); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--bd2); }
         .mini-table td { padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,0.03); }
 
@@ -496,7 +488,6 @@ export default function Landing({
           .filter-bar { grid-template-columns: 1fr 1fr !important; }
           .fixtures-container-split { grid-template-columns: 1fr !important; }
         }
-        
         @media (max-width: 900px) {
           .landing-body { flex-direction: column !important; }
           .landing-sidebar { width: 100% !important; border-right: none !important; border-top: 1px solid var(--bd); height: auto; }
@@ -509,150 +500,99 @@ export default function Landing({
         }
       `}} />
 
-      <nav className="nav-container">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Image 
-            src="/kolacommunications.svg" 
-            alt="KOLA Logo" 
-            width={120} 
-            height={32} 
-            style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} 
-            priority 
-          />
-          {authSession && (
-            <span
-              className="tag"
-              style={{
-                background: authSession.isAdmin ? 'rgba(245,158,11,0.12)' : 'rgba(0,220,114,0.1)',
-                color: authSession.isAdmin ? 'var(--am)' : 'var(--g)',
-                border: `1px solid ${authSession.isAdmin ? 'rgba(245,158,11,0.2)' : 'rgba(0,220,114,0.18)'}`,
-                padding: '4px 10px',
-                fontSize: 11
-              }}
-            >
-              {authSession.isAdmin ? 'Admin Mode' : `Logged In: ${authSession.userId}`}
-            </span>
-          )}
-        </div>
-        <div className="nav-actions">
-          
-          <div 
-            style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
-            onMouseEnter={() => setShowQuizMenu(true)}
-            onMouseLeave={() => setShowQuizMenu(false)}
-          >
-            <button className="nav-link">🏆 Quiz ▾</button>
-            {showQuizMenu && (
-              <div style={{ 
-                position: 'absolute', 
-                top: '100%', 
-                left: '50%', 
-                transform: 'translateX(-50%)', 
-                background: 'var(--bg)', 
-                border: '1px solid var(--bd2)', 
-                borderRadius: 8, 
-                padding: '6px 0', 
-                minWidth: 220, 
-                zIndex: 1000, 
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                marginTop: 0,
-                maxHeight: '60vh',
-                overflowY: 'auto'
-              }}>
-                {QUIZ_CATEGORIES.map(category => (
-                  <button 
-                    key={category}
-                    className="nav-link" 
-                    style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} 
-                    onClick={() => { setQuizCategory(category); setShowQuiz(true); setShowQuizMenu(false); }}
-                  >
-                    {category === 'General World Cup' ? '🌍' : '⚽'} {category}
-                  </button>
-                ))}
-              </div>
-            )}
+      <header className="global-sticky-header">
+        {/* Dynamic WordPress Marquee */}
+        {newsPosts.length > 0 && (
+          <div className="marquee-wrapper">
+            <div className="marquee-track">
+              {marqueeItems.map((post, idx) => (
+                <div key={`${post.id}-${idx}`} className="marquee-item">
+                  <span style={{ fontSize: 14 }}>⚡</span>
+                  <a href={post.link} target="_blank" rel="noopener noreferrer" dangerouslySetInnerHTML={{ __html: post.title.rendered }} />
+                </div>
+              ))}
+            </div>
           </div>
-          
-          <div 
-            style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
-            onMouseEnter={() => setShowSquadMenu(true)}
-            onMouseLeave={() => setShowSquadMenu(false)}
-          >
-            <button className="nav-link">👕 Squads & Teams ▾</button>
-            {showSquadMenu && (
-              <div style={{ 
-                position: 'absolute', 
-                top: '100%', 
-                left: '50%', 
-                transform: 'translateX(-50%)', 
-                background: 'var(--bg)', 
-                border: '1px solid var(--bd2)', 
-                borderRadius: 8, 
-                padding: '6px 0', 
-                minWidth: 200, 
-                zIndex: 1000, 
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                marginTop: 0
-              }}>
-                <button 
-                  className="nav-link" 
-                  style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} 
-                  onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowSquads(true); setShowSquadMenu(false); }}
-                >
-                  ⚽ FIFA World Cup 2026
-                </button>
-              </div>
-            )}
-          </div>
+        )}
 
-          <div 
-            style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
-            onMouseEnter={() => setShowFixturesMenu(true)}
-            onMouseLeave={() => setShowFixturesMenu(false)}
-          >
-            <button className="nav-link">📅 Fixtures & Results ▾</button>
-            {showFixturesMenu && (
-              <div style={{ 
-                position: 'absolute', 
-                top: '100%', 
-                left: '50%', 
-                transform: 'translateX(-50%)', 
-                background: 'var(--bg)', 
-                border: '1px solid var(--bd2)', 
-                borderRadius: 8, 
-                padding: '6px 0', 
-                minWidth: 200, 
-                zIndex: 1000, 
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                marginTop: 0
-              }}>
-                <button 
-                  className="nav-link" 
-                  style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} 
-                  onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowFixtures(true); setShowFixturesMenu(false); }}
-                >
-                  ⚽ FIFA World Cup 2026
-                </button>
-              </div>
+        {/* Global Nav Menu */}
+        <nav className="nav-container">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <Image 
+              src="/kolacommunications.svg" 
+              alt="KOLA Logo" 
+              width={120} 
+              height={32} 
+              style={{ height: 32, width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0px 0px 2px rgba(0,0,0,0.5))' }} 
+              priority 
+            />
+            {authSession && (
+              <span
+                className="tag"
+                style={{
+                  background: authSession.isAdmin ? 'rgba(245,158,11,0.12)' : 'rgba(0,220,114,0.1)',
+                  color: authSession.isAdmin ? 'var(--am)' : 'var(--g)',
+                  border: `1px solid ${authSession.isAdmin ? 'rgba(245,158,11,0.2)' : 'rgba(0,220,114,0.18)'}`,
+                  padding: '4px 10px',
+                  fontSize: 11
+                }}
+              >
+                {authSession.isAdmin ? 'Admin Mode' : `Logged In: ${authSession.userId}`}
+              </span>
             )}
           </div>
-          
-          <div style={{ width: 1, height: 20, background: 'var(--bd2)', margin: '0 8px' }} />
-          
-          <button className="btn bs bsm" onClick={() => setShowJoin(true)}>Join Room</button>
-          {authSession ? (
-            <>
-              {isAdmin && (
-                <button className="btn bs bsm" onClick={() => setShowSettings(true)}>Settings</button>
+          <div className="nav-actions">
+            
+            <div style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }} onMouseEnter={() => setShowQuizMenu(true)} onMouseLeave={() => setShowQuizMenu(false)}>
+              <button className="nav-link">🏆 Quiz ▾</button>
+              {showQuizMenu && (
+                <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', background: 'var(--bg)', border: '1px solid var(--bd2)', borderRadius: 8, padding: '6px 0', minWidth: 220, zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', marginTop: 0, maxHeight: '60vh', overflowY: 'auto' }}>
+                  {QUIZ_CATEGORIES.map(category => (
+                    <button key={category} className="nav-link" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} onClick={() => { setQuizCategory(category); setShowQuiz(true); setShowQuizMenu(false); }}>
+                      {category === 'General World Cup' ? '🌍' : '⚽'} {category}
+                    </button>
+                  ))}
+                </div>
               )}
-              <button className="btn bp bsm" onClick={onStart}>Create Room</button>
-              <button className="btn bs bsm" onClick={onLogout}>Logout</button>
-            </>
-          ) : (
-            <button className="btn bp bsm" onClick={() => openLogin('nav')}>Login</button>
-          )}
-        </div>
-      </nav>
+            </div>
+            
+            <div style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }} onMouseEnter={() => setShowSquadMenu(true)} onMouseLeave={() => setShowSquadMenu(false)}>
+              <button className="nav-link">👕 Squads & Teams ▾</button>
+              {showSquadMenu && (
+                <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', background: 'var(--bg)', border: '1px solid var(--bd2)', borderRadius: 8, padding: '6px 0', minWidth: 200, zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', marginTop: 0 }}>
+                  <button className="nav-link" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowSquads(true); setShowSquadMenu(false); }}>
+                    ⚽ FIFA World Cup 2026
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }} onMouseEnter={() => setShowFixturesMenu(true)} onMouseLeave={() => setShowFixturesMenu(false)}>
+              <button className="nav-link">📅 Fixtures & Results ▾</button>
+              {showFixturesMenu && (
+                <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', background: 'var(--bg)', border: '1px solid var(--bd2)', borderRadius: 8, padding: '6px 0', minWidth: 200, zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', marginTop: 0 }}>
+                  <button className="nav-link" style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowFixtures(true); setShowFixturesMenu(false); }}>
+                    ⚽ FIFA World Cup 2026
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <div style={{ width: 1, height: 20, background: 'var(--bd2)', margin: '0 8px' }} />
+            
+            <button className="btn bs bsm" onClick={() => setShowJoin(true)}>Join Room</button>
+            {authSession ? (
+              <>
+                {isAdmin && <button className="btn bs bsm" onClick={() => setShowSettings(true)}>Settings</button>}
+                <button className="btn bp bsm" onClick={onStart}>Create Room</button>
+                <button className="btn bs bsm" onClick={onLogout}>Logout</button>
+              </>
+            ) : (
+              <button className="btn bp bsm" onClick={() => openLogin('nav')}>Login</button>
+            )}
+          </div>
+        </nav>
+      </header>
 
       <div className="landing-body" style={{ flex: 1, display: 'flex', width: '100%', alignItems: 'stretch' }}>
         {userId && history.length > 0 && (
@@ -660,10 +600,7 @@ export default function Landing({
             <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 2, color: 'var(--t1)', marginBottom: 16 }}>Your Recent Rooms</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {history.map((room) => (
-                <div key={room.id} className="card hover-lift" style={{ padding: 14, cursor: 'pointer', border: '1px solid var(--bd2)' }} onClick={() => {
-                  setRoomCode(room.id);
-                  setShowJoin(true);
-                }}>
+                <div key={room.id} className="card hover-lift" style={{ padding: 14, cursor: 'pointer', border: '1px solid var(--bd2)' }} onClick={() => { setRoomCode(room.id); setShowJoin(true); }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                     <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 16, fontWeight: 700, color: 'var(--t1)' }}>{room.name}</div>
                     <span className="tag" style={{ fontSize: 9, padding: '2px 6px', background: room.phase === 'done' ? 'rgba(255,255,255,0.1)' : room.phase === 'bidding' ? 'rgba(0,220,114,0.15)' : 'rgba(245,158,11,0.15)', color: room.phase === 'done' ? 'var(--t3)' : room.phase === 'bidding' ? 'var(--g)' : 'var(--am)' }}>
@@ -701,14 +638,14 @@ export default function Landing({
               </button>
               <button className="btn bs" onClick={() => setShowJoin(true)} style={{ fontSize: 17, padding: '13px 34px' }}>Join a Room</button>
             </div>
+            
+            {/* REAL ANIMATED COUNTERS */}
             <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap' }}>
-              {[{ v: '2,400+', l: 'Auctions' }, { v: '18K+', l: 'Players Sold' }, { v: '4.9★', l: 'Rating' }].map((s) => (
-                <div key={s.l} style={{ textAlign: 'center', minWidth: 90 }}>
-                  <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 34, color: 'var(--g)', letterSpacing: 2 }}>{s.v}</div>
-                  <div style={{ color: 'var(--t3)', fontSize: 12, fontFamily: "'Rajdhani', sans-serif", letterSpacing: 1, textTransform: 'uppercase', marginTop: 2 }}>{s.l}</div>
-                </div>
-              ))}
+              <AnimatedStat target={2400} label="Auctions" suffix="+" />
+              <AnimatedStat target={18} label="Players Sold" suffix="K+" isK={true} />
+              <AnimatedStat target={4.9} label="Rating" suffix="★" decimals={1} isK={true} />
             </div>
+
           </div>
         </div>
       </div>
@@ -742,7 +679,7 @@ export default function Landing({
 
       {showQuiz && <WorldCupQuiz category={quizCategory} onClose={() => setShowQuiz(false)} />}
 
-      {/* DYNAMIC FIXTURES OVERLAY MODULE WITH LIVE SIDEBAR TABLES */}
+      {/* DYNAMIC FIXTURES OVERLAY MODULE */}
       {showFixtures && (
         <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 1300, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
@@ -903,23 +840,17 @@ export default function Landing({
         </div>
       )}
 
+      {/* SQUADS OVERLAY */}
       {showSquads && (
         <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 1340, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
-            
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--bd)', paddingBottom: 16, marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
               <div>
                 <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, margin: 0 }}>👕 SQUADS & TEAMS</h3>
                 <p style={{ color: 'var(--t3)', fontSize: 13, margin: '4px 0 0' }}>Examine structural compositions mapped via Hybrid Point Performance ceilings.</p>
               </div>
-              
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <select 
-                  className="inp" 
-                  value={selectedTournament} 
-                  onChange={(e) => setSelectedTournament(e.target.value)}
-                  style={{ minWidth: 240, height: 40, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}
-                >
+                <select className="inp" value={selectedTournament} onChange={(e) => setSelectedTournament(e.target.value)} style={{ minWidth: 240, height: 40, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
                   <option value="FIFA World Cup 2026">FIFA World Cup 2026</option>
                 </select>
                 <button onClick={() => setShowSquads(false)} style={{ background: 'var(--bg3)', border: '1px solid var(--bd)', color: 'var(--t1)', width: 40, height: 40, borderRadius: 8, cursor: 'pointer', fontSize: 16, fontWeight: 'bold' }}>✕</button>
@@ -929,26 +860,15 @@ export default function Landing({
             <div className="filter-bar">
               <div>
                 <Label>Search Player / Club</Label>
-                <input 
-                  type="text" 
-                  className="inp" 
-                  placeholder="e.g. Bukayo Saka or Real Madrid..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ marginTop: 4, height: 38 }}
-                />
+                <input type="text" className="inp" placeholder="e.g. Bukayo Saka or Real Madrid..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ marginTop: 4, height: 38 }} />
               </div>
-
               <div>
                 <Label>Filter By Team</Label>
                 <select className="inp" value={filterCountry} onChange={(e) => setFilterCountry(e.target.value)} style={{ marginTop: 4, height: 38 }}>
                   <option value="All">All Nations ({masterCountriesList.length})</option>
-                  {masterCountriesList.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {masterCountriesList.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-
               <div>
                 <Label>Filter By Position</Label>
                 <select className="inp" value={filterPosition} onChange={(e) => setFilterPosition(e.target.value)} style={{ marginTop: 4, height: 38 }}>
@@ -959,7 +879,6 @@ export default function Landing({
                   <option value="Forward">Forwards</option>
                 </select>
               </div>
-
               <div>
                 <Label>Filter By Tier</Label>
                 <select className="inp" value={filterTier} onChange={(e) => setFilterTier(e.target.value)} style={{ marginTop: 4, height: 38 }}>
@@ -973,10 +892,6 @@ export default function Landing({
               </div>
             </div>
 
-            <div style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--t2)', fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
-              💡 Showing <span style={{ color: 'var(--g)' }}>{filteredPlayers.length}</span> matching players across <span style={{ color: 'var(--am)' }}>{activeCountries.length}</span> active teams.
-            </div>
-
             {selectedTournament === 'FIFA World Cup 2026' && (
               activeCountries.length === 0 ? (
                 <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--t3)', fontFamily: "'Rajdhani', sans-serif" }}>
@@ -986,7 +901,6 @@ export default function Landing({
                 <div className="squads-matrix">
                   {activeCountries.map((countryName) => {
                     const countryPlayers = filteredPlayers.filter((p: any) => (p.country || p.nationality || '') === countryName);
-                    
                     const gks = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('goalkeeper') || (p.role || '').toLowerCase() === 'gk');
                     const defs = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('defender') || (p.role || '').toLowerCase() === 'def');
                     const mids = countryPlayers.filter((p: any) => (p.role || '').toLowerCase().includes('midfielder') || (p.role || '').toLowerCase().includes('midfield') || (p.role || '').toLowerCase() === 'cm');
@@ -1020,16 +934,7 @@ export default function Landing({
                                         <b>{player.name}</b> 
                                         {player.club ? <span style={{ color: 'var(--t3)', fontSize: 11 }}> | {player.club}</span> : null}
                                       </div>
-                                      <span style={{ 
-                                        fontFamily: "'Rajdhani', sans-serif", 
-                                        fontSize: 10, 
-                                        fontWeight: 700, 
-                                        padding: '2px 6px', 
-                                        borderRadius: 4, 
-                                        background: hybridTier === 1 ? 'rgba(0,220,114,0.12)' : hybridTier === 2 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)', 
-                                        color: hybridTier === 1 ? 'var(--g)' : hybridTier === 2 ? 'var(--am)' : 'var(--t2)',
-                                        flexShrink: 0
-                                      }}>
+                                      <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: hybridTier === 1 ? 'rgba(0,220,114,0.12)' : hybridTier === 2 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)', color: hybridTier === 1 ? 'var(--g)' : hybridTier === 2 ? 'var(--am)' : 'var(--t2)', flexShrink: 0 }}>
                                         T{hybridTier}
                                       </span>
                                     </div>
@@ -1117,53 +1022,23 @@ export default function Landing({
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <Label>Team Logo (Optional)</Label>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button className="btn bs bsm" onClick={() => teamPhotoRef.current?.click()}>
-                        Upload Logo
-                      </button>
-                      {teamPhoto && (
-                        <button className="btn bs bsm" onClick={() => setTeamPhoto(null)}>
-                          Remove Logo
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ color: 'var(--t3)', fontSize: 11 }}>
-                      The next available slot will be assigned to this team.
+                      <button className="btn bs bsm" onClick={() => teamPhotoRef.current?.click()}>Upload Logo</button>
+                      {teamPhoto && <button className="btn bs bsm" onClick={() => setTeamPhoto(null)}>Remove Logo</button>}
                     </div>
                   </div>
-                  <input
-                    ref={teamPhotoRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
+                  <input ref={teamPhotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-
                       const img = new window.Image();
                       img.onload = () => {
                         const canvas = document.createElement('canvas');
                         const MAX_SIZE = 150; 
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height && width > MAX_SIZE) {
-                          height *= MAX_SIZE / width;
-                          width = MAX_SIZE;
-                        } else if (height > MAX_SIZE) {
-                          width *= MAX_SIZE / height;
-                          height = MAX_SIZE;
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
+                        let width = img.width; let height = img.height;
+                        if (width > height && width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } 
+                        else if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                        canvas.width = width; canvas.height = height;
                         const ctx = canvas.getContext('2d');
-                        if (ctx) {
-                          ctx.drawImage(img, 0, 0, width, height);
-                          setTeamPhoto(canvas.toDataURL('image/jpeg', 0.8));
-                        }
-                      };
-                      img.onerror = () => {
-                        setError('Failed to process image. Try a different one.');
+                        if (ctx) { ctx.drawImage(img, 0, 0, width, height); setTeamPhoto(canvas.toDataURL('image/jpeg', 0.8)); }
                       };
                       img.src = URL.createObjectURL(file);
                     }}
@@ -1172,9 +1047,7 @@ export default function Landing({
 
                 <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
                   <button className="btn bs" onClick={handleCloseJoin} style={{ flex: 1, minWidth: 100 }}>Back</button>
-                  <button className="btn bp" onClick={submitJoin} disabled={loading || !userName || !teamName} style={{ flex: 2, minWidth: 180 }}>
-                    {loading ? 'Joining...' : 'Join Auction →'}
-                  </button>
+                  <button className="btn bp" onClick={submitJoin} disabled={loading || !userName || !teamName} style={{ flex: 2, minWidth: 180 }}>{loading ? 'Joining...' : 'Join Auction →'}</button>
                 </div>
               </div>
             )}
@@ -1186,172 +1059,15 @@ export default function Landing({
         <div style={overlayStyle}>
           <div className="card modal-content" style={modalStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>LOGIN</h3>
-                <p style={{ color: 'var(--t3)', fontSize: 12, marginTop: 4 }}>
-                  Sign in to host auctions and access admin settings.
-                </p>
-              </div>
+              <div><h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 2 }}>LOGIN</h3></div>
               <button onClick={closeLogin} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
             </div>
-
-            {loginError && (
-              <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: 'var(--re)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                ⚠️ {loginError}
-              </div>
-            )}
-
+            {loginError && <div style={{ fontSize: 13, padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', color: 'var(--re)', border: '1px solid rgba(239,68,68,0.2)' }}>⚠️ {loginError}</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <Label>User ID</Label>
-                <input
-                  className="inp"
-                  placeholder="Enter your user ID"
-                  value={loginForm.userId}
-                  onChange={(e) => setLoginForm((prev) => ({ ...prev, userId: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }}
-                  style={{ fontSize: '16px' }}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <Label>Password</Label>
-                <input
-                  className="inp"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }}
-                  style={{ fontSize: '16px' }}
-                />
-              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><Label>User ID</Label><input className="inp" value={loginForm.userId} onChange={(e) => setLoginForm((prev) => ({ ...prev, userId: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }} /></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><Label>Password</Label><input className="inp" type="password" value={loginForm.password} onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') submitLogin(); }} /></div>
             </div>
-
-            <button className="btn bp" onClick={submitLogin} style={{ width: '100%', padding: 12 }}>
-              Login →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showSettings && isAdmin && (
-        <div style={overlayStyle}>
-          <div className="card modal-content" style={{ ...modalStyle, maxWidth: 760 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div>
-                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, letterSpacing: 2 }}>USER SETTINGS</h3>
-                <p style={{ color: 'var(--t3)', fontSize: 12, marginTop: 4 }}>
-                  Create user IDs and activate or deactivate access.
-                </p>
-              </div>
-              <button onClick={() => setShowSettings(false)} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 20, cursor: 'pointer' }}>✕</button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
-              <div className="card" style={{ padding: 18, background: 'rgba(0,220,114,0.04)', border: '1px solid rgba(0,220,114,0.16)' }}>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 1.5, marginBottom: 14 }}>CREATE USER</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <Label>New User ID</Label>
-                    <input
-                      className="inp"
-                      placeholder="e.g. auctionhost01"
-                      value={settingsForm.userId}
-                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, userId: e.target.value }))}
-                      style={{ fontSize: '16px' }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <Label>Password</Label>
-                    <input
-                      className="inp"
-                      type="password"
-                      placeholder="Set a password"
-                      value={settingsForm.password}
-                      onChange={(e) => setSettingsForm((prev) => ({ ...prev, password: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === 'Enter') submitManagedUser(); }}
-                      style={{ fontSize: '16px' }}
-                    />
-                  </div>
-                  <button className="btn bp" onClick={submitManagedUser}>Create User</button>
-                </div>
-              </div>
-
-              <div className="card" style={{ padding: 18 }}>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 1.5, marginBottom: 14 }}>ADMIN ACCOUNT</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: 'var(--bg3)', border: '1px solid rgba(245,158,11,0.18)', borderRadius: 10, padding: 14 }}>
-                    <div>
-                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 16, color: 'var(--t1)' }}>admin</div>
-                      <div style={{ color: 'var(--t3)', fontSize: 12 }}>Reserved account for settings access</div>
-                    </div>
-                    <span className="tag" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--am)' }}>
-                      Always Active
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {(settingsError || settingsMessage) && (
-              <div style={{
-                fontSize: 13,
-                padding: '10px 12px',
-                borderRadius: 8,
-                background: settingsError ? 'rgba(239,68,68,0.08)' : 'rgba(0,220,114,0.08)',
-                color: settingsError ? 'var(--re)' : 'var(--g)',
-                border: `1px solid ${settingsError ? 'rgba(239,68,68,0.2)' : 'rgba(0,220,114,0.18)'}`,
-              }}>
-                {settingsError ? `⚠️ ${settingsError}` : `✅ ${settingsMessage}`}
-              </div>
-            )}
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-                <h4 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, letterSpacing: 1.5 }}>MANAGED USERS</h4>
-                <span style={{ color: 'var(--t3)', fontSize: 12 }}>
-                  {managedUsers.length} user{managedUsers.length === 1 ? '' : 's'}
-                </span>
-              </div>
-
-              {managedUsers.length === 0 ? (
-                <div className="card" style={{ padding: 18, color: 'var(--t3)', textAlign: 'center' }}>
-                  No additional users yet. Create one above to allow more hosts to log in.
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-                  {[...managedUsers]
-                    .sort((a, b) => b.createdAt - a.createdAt)
-                    .map((managedUser) => (
-                      <div key={managedUser.userId} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                          <div>
-                            <div style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, fontSize: 16 }}>{managedUser.userId}</div>
-                            <div style={{ color: 'var(--t3)', fontSize: 11, marginTop: 3 }}>
-                              Created {formatCreatedAt(managedUser.createdAt)}
-                            </div>
-                          </div>
-                          <span
-                            className="tag"
-                            style={{
-                              background: managedUser.active ? 'rgba(0,220,114,0.1)' : 'rgba(239,68,68,0.1)',
-                              color: managedUser.active ? 'var(--g)' : 'var(--re)',
-                            }}
-                          >
-                            {managedUser.active ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                        <button
-                          className={`btn ${managedUser.active ? 'bs' : 'bp'}`}
-                          onClick={() => handleToggleManagedUser(managedUser.userId, managedUser.active)}
-                        >
-                          {managedUser.active ? 'Deactivate User' : 'Activate User'}
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
+            <button className="btn bp" onClick={submitLogin} style={{ width: '100%', padding: 12 }}>Login →</button>
           </div>
         </div>
       )}
