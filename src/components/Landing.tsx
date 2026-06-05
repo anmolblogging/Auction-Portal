@@ -7,6 +7,7 @@ import type { AuctionPhase } from '@/lib/types';
 import { WC2026_PLAYERS } from '@/lib/wcSquads';
 import Avatar from '@/components/ui/Avatar';
 import WorldCupQuiz from '@/components/WorldCupQuiz';
+import Spinner from '@/components/ui/Spinner';
 
 interface RoomHistoryEntry {
   id: string;
@@ -79,7 +80,6 @@ const modalStyle: CSSProperties = {
   padding: 24,
 };
 
-// Unified classification tiers configuration
 function calculateHybridTier(player: any): number {
   const team = (player.country || player.nationality || '').toLowerCase().trim();
   const position = (player.role || player.position || '').toLowerCase().trim();
@@ -144,6 +144,8 @@ export default function Landing({
   const [showQuiz, setShowQuiz] = useState(false);
   const [showSquads, setShowSquads] = useState(false); 
   const [showSquadMenu, setShowSquadMenu] = useState(false); 
+  const [showFixtures, setShowFixtures] = useState(false); 
+  const [showFixturesMenu, setShowFixturesMenu] = useState(false); 
   const [selectedTournament, setSelectedTournament] = useState('FIFA World Cup 2026');
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -167,6 +169,37 @@ export default function Landing({
   const [filterPosition, setFilterPosition] = useState('All');
   const [filterTier, setFilterTier] = useState('All');
   const [filterCountry, setFilterCountry] = useState('All');
+  
+  // Automated Data Hooks
+  const [apiFixtures, setApiFixtures] = useState<any[]>([]);
+  const [apiStandings, setApiStandings] = useState<any[]>([]);
+  const [loadingFixtures, setLoadingFixtures] = useState(false);
+  const [isFallbackData, setIsFallbackData] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Unique Group Filter States
+  const [matchGroupFilter, setMatchGroupFilter] = useState('All');
+  const [matchTeamFilter, setMatchTeamFilter] = useState('All');
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (showFixtures && apiFixtures.length === 0) {
+      setLoadingFixtures(true);
+      fetch('/api/fixtures')
+        .then(res => res.json())
+        .then(data => {
+          if (data.fixtures) setApiFixtures(data.fixtures);
+          if (data.standings) setApiStandings(data.standings);
+          setIsFallbackData(!!data.isFallback);
+        })
+        .catch(err => console.error("Error communicating with fixtures API:", err))
+        .finally(() => setLoadingFixtures(false));
+    }
+  }, [showFixtures]);
 
   useEffect(() => {
     if (userId) {
@@ -369,6 +402,41 @@ export default function Landing({
 
   const activeCountries = Array.from(new Set(filteredPlayers.map((p: any) => p.country || p.nationality || 'Unknown'))).sort() as string[];
 
+  // Timezone & Filtering Engine for Fixtures
+  const visibleFixtures = apiFixtures.filter(f => {
+    if (f.status === 'FINISHED' || f.status === 'IN_PLAY') return true; 
+    return new Date(f.datetime).getTime() > currentTime; 
+  }).filter(f => {
+    let matchesGroup = true;
+    if (matchGroupFilter !== 'All') {
+      matchesGroup = f.stage.toLowerCase().includes(matchGroupFilter.toLowerCase());
+    }
+    let matchesTeam = true;
+    if (matchTeamFilter !== 'All') {
+      matchesTeam = f.team1.toLowerCase() === matchTeamFilter.toLowerCase() || f.team2.toLowerCase() === matchTeamFilter.toLowerCase();
+    }
+    return matchesGroup && matchesTeam;
+  }).sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
+
+  const groupedFixtures = visibleFixtures.reduce((acc, match) => {
+    const dayLabel = new Date(match.datetime).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    if (!acc[dayLabel]) acc[dayLabel] = [];
+    acc[dayLabel].push(match);
+    return acc;
+  }, {} as Record<string, typeof apiFixtures>);
+
+  // Gather unique groups present in matches dataset
+  const uniqueMatchGroups = Array.from(new Set(apiFixtures.map(f => {
+    const parts = f.stage.split(' - ');
+    return parts[1] || null;
+  }).filter(Boolean))).sort() as string[];
+
+  // Gather unique teams present in matches dataset
+  const uniqueMatchTeams = Array.from(new Set([
+    ...apiFixtures.map(f => f.team1),
+    ...apiFixtures.map(f => f.team2)
+  ])).filter(t => t && t !== 'TBD').sort() as string[];
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <style dangerouslySetInnerHTML={{__html: `
@@ -398,9 +466,34 @@ export default function Landing({
           margin-bottom: 20px;
         }
 
+        /* Responsive 2-column container for Fixtures + Standings Layout */
+        .fixtures-container-split {
+          display: grid;
+          grid-template-columns: 1fr 320px;
+          gap: 24px;
+          align-items: start;
+        }
+
+        .standings-sidebar-widget {
+          background: var(--bg2);
+          border: 1px solid var(--bd2);
+          border-radius: 12px;
+          padding: 16px;
+        }
+
+        .mini-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          font-size: 13px;
+        }
+        .mini-table th { text-align: left; padding: 6px 4px; color: var(--t3); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--bd2); }
+        .mini-table td { padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+
         @media (max-width: 1024px) {
           .squads-matrix { grid-template-columns: repeat(2, 1fr) !important; }
           .filter-bar { grid-template-columns: 1fr 1fr !important; }
+          .fixtures-container-split { grid-template-columns: 1fr !important; }
         }
         
         @media (max-width: 900px) {
@@ -475,7 +568,37 @@ export default function Landing({
             )}
           </div>
 
-          <button className="nav-link" onClick={() => alert('Fixtures module is coming soon!')}>📅 Fixtures</button>
+          <div 
+            style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
+            onMouseEnter={() => setShowFixturesMenu(true)}
+            onMouseLeave={() => setShowFixturesMenu(false)}
+          >
+            <button className="nav-link">📅 Fixtures & Results ▾</button>
+            {showFixturesMenu && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '100%', 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                background: 'var(--bg)', 
+                border: '1px solid var(--bd2)', 
+                borderRadius: 8, 
+                padding: '6px 0', 
+                minWidth: 200, 
+                zIndex: 1000, 
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                marginTop: 0
+              }}>
+                <button 
+                  className="nav-link" 
+                  style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} 
+                  onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowFixtures(true); setShowFixturesMenu(false); }}
+                >
+                  ⚽ FIFA World Cup 2026
+                </button>
+              </div>
+            )}
+          </div>
           
           <div style={{ width: 1, height: 20, background: 'var(--bd2)', margin: '0 8px' }} />
           
@@ -581,6 +704,170 @@ export default function Landing({
       </div>
 
       {showQuiz && <WorldCupQuiz onClose={() => setShowQuiz(false)} />}
+
+      {/* DYNAMIC FIXTURES OVERLAY MODULE WITH LIVE SIDEBAR TABLES */}
+      {showFixtures && (
+        <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
+          <div className="card" style={{ width: '100%', maxWidth: 1300, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--bd)', paddingBottom: 16, marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
+              <div>
+                <h3 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, margin: 0 }}>📅 FIXTURES & RESULTS</h3>
+                <p style={{ color: 'var(--t3)', fontSize: 13, margin: '4px 0 0' }}>
+                  Real-time live scores integrated via Football-Data API. Match times auto-convert to your timezone.
+                </p>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <select 
+                  className="inp" 
+                  value={selectedTournament} 
+                  onChange={(e) => setSelectedTournament(e.target.value)}
+                  style={{ minWidth: 240, height: 40, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}
+                >
+                  <option value="FIFA World Cup 2026">FIFA World Cup 2026</option>
+                </select>
+                <button onClick={() => setShowFixtures(false)} style={{ background: 'var(--bg3)', border: '1px solid var(--bd)', color: 'var(--t1)', width: 40, height: 40, borderRadius: 8, cursor: 'pointer', fontSize: 16, fontWeight: 'bold' }}>✕</button>
+              </div>
+            </div>
+
+            {/* Custom Multi-Dimensional Filtering Bar */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--bg3)', border: '1px solid var(--bd2)', padding: 14, borderRadius: 10, marginBottom: 20 }}>
+              <div>
+                <Label>Filter By Group</Label>
+                <select className="inp" value={matchGroupFilter} onChange={(e) => setMatchGroupFilter(e.target.value)} style={{ marginTop: 4, height: 38 }}>
+                  <option value="All">All Tournament Groups</option>
+                  {uniqueMatchGroups.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Filter By Team</Label>
+                <select className="inp" value={matchTeamFilter} onChange={(e) => setMatchTeamFilter(e.target.value)} style={{ marginTop: 4, height: 38 }}>
+                  <option value="All">All Nations ({uniqueMatchTeams.length})</option>
+                  {uniqueMatchTeams.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {isFallbackData && (
+              <div style={{ fontSize: 13, padding: '10px 14px', borderRadius: 8, background: 'rgba(245,158,11,0.06)', color: 'var(--am)', border: '1px solid rgba(245,158,11,0.18)', marginBottom: 20, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
+                💡 Viewing system fallback preview. For full live 104-match results tracking, specify your token inside <code>FOOTBALL_DATA_API_KEY</code> on .env.local.
+              </div>
+            )}
+
+            {loadingFixtures ? (
+              <div style={{ padding: '60px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <Spinner />
+                <span style={{ fontFamily: "'Rajdhani', sans-serif", color: 'var(--t3)', fontSize: 14 }}>Aggregating real-time tournament tables...</span>
+              </div>
+            ) : (
+              <div className="fixtures-container-split">
+                {/* Left Side: Dynamic Fixtures Timeline */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                  {visibleFixtures.length === 0 ? (
+                    <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--t3)', fontFamily: "'Rajdhani', sans-serif" }}>
+                      🚫 No fixtures match your chosen filter constraints.
+                    </div>
+                  ) : (
+                    Object.keys(groupedFixtures).map((dateKey) => (
+                      <div key={dateKey}>
+                        <h4 style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 15, fontWeight: 700, color: 'var(--g)', letterSpacing: 1, textTransform: 'uppercase', borderBottom: '1px solid rgba(0,220,114,0.15)', paddingBottom: 6, marginBottom: 14 }}>
+                          {dateKey}
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {groupedFixtures[dateKey].map(fixture => (
+                            <div key={fixture.id} className="card" style={{ padding: 16, background: 'var(--bg2)', border: '1px solid var(--bd2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 200 }}>
+                                <span style={{ fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
+                                  Match {fixture.matchNumber} • {fixture.stage}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--t1)', letterSpacing: 0.5 }}>{fixture.team1}</span>
+                                  <span style={{ fontSize: 12, color: 'var(--t3)', background: 'var(--bg3)', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>VS</span>
+                                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--t1)', letterSpacing: 0.5 }}>{fixture.team2}</span>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                                {fixture.status === 'FINISHED' || fixture.status === 'IN_PLAY' ? (
+                                  <div>
+                                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 30, color: fixture.status === 'IN_PLAY' ? 'var(--am)' : 'var(--t1)', letterSpacing: 1, lineHeight: 1 }}>
+                                      {fixture.score1} - {fixture.score2}
+                                    </div>
+                                    <span style={{ fontSize: 10, color: fixture.status === 'IN_PLAY' ? 'var(--am)' : 'var(--g)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 'bold', marginTop: 4, display: 'block' }}>
+                                      {fixture.status === 'IN_PLAY' ? '• Live Score' : '✓ Final Score'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--g)', letterSpacing: 1, background: 'rgba(0,220,114,0.04)', padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(0,220,114,0.08)' }}>
+                                      {new Date(fixture.datetime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                    <span style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4, display: 'block' }}>Local Time</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Right Side: Group Tables Side Widget */}
+                <div className="standings-sidebar-widget">
+                  <h4 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1.5, color: 'var(--t1)', borderBottom: '1px solid var(--bd2)', paddingBottom: 8, marginBottom: 14 }}>
+                    📊 GROUP STANDINGS
+                  </h4>
+                  {apiStandings.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--t3)', textAlign: 'center', padding: '20px 0', fontFamily: "'Rajdhani', sans-serif" }}>
+                      Standings details will populate dynamically as matches kick off.
+                    </div>
+                  ) : (
+                    apiStandings.map((groupData) => (
+                      <div key={groupData.group} style={{ marginBottom: 16 }}>
+                        <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 12, fontWeight: 700, color: 'var(--g)', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 }}>
+                          {groupData.group}
+                        </div>
+                        <table className="mini-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: 24 }}>#</th>
+                              <th>Team</th>
+                              <th style={{ textAlign: 'center', width: 30 }}>P</th>
+                              <th style={{ textAlign: 'center', width: 30 }}>GD</th>
+                              <th style={{ textAlign: 'center', width: 30 }}>Pts</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {groupData.table.map((row: any) => (
+                              <tr key={row.team.name} style={{ background: row.team.name.toLowerCase() === matchTeamFilter.toLowerCase() ? 'rgba(0,220,114,0.06)' : 'transparent' }}>
+                                <td style={{ fontWeight: 600, color: 'var(--t3)' }}>{row.position}</td>
+                                <td style={{ fontWeight: 600, color: 'var(--t1)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                                  {row.team.name}
+                                </td>
+                                <td style={{ textAlign: 'center', color: 'var(--t2)' }}>{row.playedGames}</td>
+                                <td style={{ textAlign: 'center', color: row.goalDifference > 0 ? 'var(--g)' : row.goalDifference < 0 ? 'var(--re)' : 'var(--t3)' }}>
+                                  {row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}
+                                </td>
+                                <td style={{ textAlign: 'center', fontWeight: 'bold', color: 'var(--g)' }}>{row.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* DETAILED TEAMS & SQUADS DATA COMPOSER OVERLAY */}
       {showSquads && (
