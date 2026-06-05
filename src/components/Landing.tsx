@@ -142,6 +142,8 @@ export default function Landing({
 }: LandingProps) {
   const [showJoin, setShowJoin] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [showQuizMenu, setShowQuizMenu] = useState(false);
+  const [quizCategory, setQuizCategory] = useState('General World Cup');
   const [showSquads, setShowSquads] = useState(false); 
   const [showSquadMenu, setShowSquadMenu] = useState(false); 
   const [showFixtures, setShowFixtures] = useState(false); 
@@ -170,14 +172,12 @@ export default function Landing({
   const [filterTier, setFilterTier] = useState('All');
   const [filterCountry, setFilterCountry] = useState('All');
   
-  // Automated Data Hooks
   const [apiFixtures, setApiFixtures] = useState<any[]>([]);
   const [apiStandings, setApiStandings] = useState<any[]>([]);
   const [loadingFixtures, setLoadingFixtures] = useState(false);
   const [isFallbackData, setIsFallbackData] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  // Unique Group Filter States
   const [matchGroupFilter, setMatchGroupFilter] = useState('All');
   const [matchTeamFilter, setMatchTeamFilter] = useState('All');
 
@@ -402,7 +402,6 @@ export default function Landing({
 
   const activeCountries = Array.from(new Set(filteredPlayers.map((p: any) => p.country || p.nationality || 'Unknown'))).sort() as string[];
 
-  // Timezone & Filtering Engine for Fixtures
   const visibleFixtures = apiFixtures.filter(f => {
     if (f.status === 'FINISHED' || f.status === 'IN_PLAY') return true; 
     return new Date(f.datetime).getTime() > currentTime; 
@@ -425,17 +424,20 @@ export default function Landing({
     return acc;
   }, {} as Record<string, typeof apiFixtures>);
 
-  // Gather unique groups present in matches dataset
   const uniqueMatchGroups = Array.from(new Set(apiFixtures.map(f => {
     const parts = f.stage.split(' - ');
     return parts[1] || null;
   }).filter(Boolean))).sort() as string[];
 
-  // Gather unique teams present in matches dataset
   const uniqueMatchTeams = Array.from(new Set([
     ...apiFixtures.map(f => f.team1),
     ...apiFixtures.map(f => f.team2)
   ])).filter(t => t && t !== 'TBD').sort() as string[];
+
+  const QUIZ_CATEGORIES = [
+    'General World Cup', 'Argentina', 'Brazil', 'France', 'Germany', 'England', 'Spain', 'Portugal',
+    'Netherlands', 'Belgium', 'Croatia', 'Sweden', 'Scotland', 'Norway'
+  ];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -466,7 +468,6 @@ export default function Landing({
           margin-bottom: 20px;
         }
 
-        /* Responsive 2-column container for Fixtures + Standings Layout */
         .fixtures-container-split {
           display: grid;
           grid-template-columns: 1fr 320px;
@@ -534,7 +535,43 @@ export default function Landing({
           )}
         </div>
         <div className="nav-actions">
-          <button className="nav-link" onClick={() => setShowQuiz(true)}>🏆 WC Quiz</button>
+          
+          <div 
+            style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
+            onMouseEnter={() => setShowQuizMenu(true)}
+            onMouseLeave={() => setShowQuizMenu(false)}
+          >
+            <button className="nav-link">🏆 Quiz ▾</button>
+            {showQuizMenu && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '100%', 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                background: 'var(--bg)', 
+                border: '1px solid var(--bd2)', 
+                borderRadius: 8, 
+                padding: '6px 0', 
+                minWidth: 220, 
+                zIndex: 1000, 
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                marginTop: 0,
+                maxHeight: '60vh',
+                overflowY: 'auto'
+              }}>
+                {QUIZ_CATEGORIES.map(category => (
+                  <button 
+                    key={category}
+                    className="nav-link" 
+                    style={{ width: '100%', textAlign: 'left', borderRadius: 0, padding: '10px 16px', display: 'block' }} 
+                    onClick={() => { setQuizCategory(category); setShowQuiz(true); setShowQuizMenu(false); }}
+                  >
+                    {category === 'General World Cup' ? '🌍' : '⚽'} {category}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           
           <div 
             style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }}
@@ -703,7 +740,7 @@ export default function Landing({
         </div>
       </div>
 
-      {showQuiz && <WorldCupQuiz onClose={() => setShowQuiz(false)} />}
+      {showQuiz && <WorldCupQuiz category={quizCategory} onClose={() => setShowQuiz(false)} />}
 
       {/* DYNAMIC FIXTURES OVERLAY MODULE WITH LIVE SIDEBAR TABLES */}
       {showFixtures && (
@@ -731,7 +768,6 @@ export default function Landing({
               </div>
             </div>
 
-            {/* Custom Multi-Dimensional Filtering Bar */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--bg3)', border: '1px solid var(--bd2)', padding: 14, borderRadius: 10, marginBottom: 20 }}>
               <div>
                 <Label>Filter By Group</Label>
@@ -766,7 +802,6 @@ export default function Landing({
               </div>
             ) : (
               <div className="fixtures-container-split">
-                {/* Left Side: Dynamic Fixtures Timeline */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
                   {visibleFixtures.length === 0 ? (
                     <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--t3)', fontFamily: "'Rajdhani', sans-serif" }}>
@@ -818,7 +853,6 @@ export default function Landing({
                   )}
                 </div>
 
-                {/* Right Side: Group Tables Side Widget */}
                 <div className="standings-sidebar-widget">
                   <h4 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1.5, color: 'var(--t1)', borderBottom: '1px solid var(--bd2)', paddingBottom: 8, marginBottom: 14 }}>
                     📊 GROUP STANDINGS
@@ -869,7 +903,6 @@ export default function Landing({
         </div>
       )}
 
-      {/* DETAILED TEAMS & SQUADS DATA COMPOSER OVERLAY */}
       {showSquads && (
         <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 1340, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
