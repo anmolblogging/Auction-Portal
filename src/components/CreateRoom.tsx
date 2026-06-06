@@ -59,10 +59,11 @@ interface CreateRoomProps {
   onBack: () => void;
 }
 
+// FIX: Slashes removed to prevent router crash
 const SPORT_OPTIONS = [
-  'Cricket / IPL',
-  'Football / UEFA',
-  'Football / FIFA',
+  'Cricket - IPL',
+  'Football - UEFA',
+  'Football - FIFA',
 ];
 
 function getDefaultTournament(sport: string) {
@@ -100,7 +101,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
   
   const [cfg, setCfg] = useState<RoomConfig & { enableBots: boolean }>({
     name: 'IPL Fantasy 2025',
-    sport: 'Cricket / IPL',
+    sport: 'Cricket - IPL',
     tournament: 'IPL 2025',
     participants: 4,
     budget: 10000,
@@ -108,7 +109,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
     enableBots: true,
   });
 
-  const [players, setPlayers] = useState<Player[]>(() => applySportRules('Cricket / IPL', getPlayersForSport('Cricket / IPL')));
+  const [players, setPlayers] = useState<Player[]>(() => applySportRules('Cricket - IPL', getPlayersForSport('Cricket - IPL')));
   const [isCustomPool, setIsCustomPool] = useState(false); 
   
   const [hostTeamName, setHostTeamName] = useState('Your Team');
@@ -132,7 +133,7 @@ export default function CreateRoom({ userId, onLaunch, onBack }: CreateRoomProps
   const [scheduledTime, setScheduledTime] = useState(defaults.time);
 
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualP, setManualP] = useState({ name: '', role: getRoleOptions('Cricket / IPL')[0], country: 'India', base: 50 });
+  const [manualP, setManualP] = useState({ name: '', role: getRoleOptions('Cricket - IPL')[0], country: 'India', base: 50 });
 
   const xlRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);

@@ -40,7 +40,6 @@ export async function POST(request: Request) {
   try {
     const reqBody = await request.json();
     
-    // Destructure using the EXACT field names sent from CreateRoom.tsx
     const { 
       roomId, 
       name, 
@@ -51,11 +50,10 @@ export async function POST(request: Request) {
       enableBots,
       teams, 
       players, 
-      hostId, // Note: using hostId instead of creatorId
+      hostId, 
       scheduledAt
     } = reqBody;
 
-    // 1. Validation Check using the correct variable names
     if (!name || !sport || !hostId || !teams) {
       return NextResponse.json({ error: 'Missing required room fields. Please check room name, sport, and host.' }, { status: 400 });
     }
@@ -63,7 +61,6 @@ export async function POST(request: Request) {
     const finalRoomId = roomId || Math.random().toString(36).substring(2, 8).toUpperCase();
     const initialBudget = budget || 10000;
 
-    // 2. Format Teams - Overwrite any hardcoded budgets with the host's custom budget
     const processedTeams: Record<string, any> = {};
     for (const [key, teamData] of Object.entries(teams)) {
         processedTeams[key] = {
@@ -74,7 +71,6 @@ export async function POST(request: Request) {
 
     let finalizedPlayers = players || [];
 
-    // 3. Apply Hybrid Logic if Football/FIFA
     if (sport.toLowerCase().includes('football') || sport.toLowerCase().includes('fifa')) {
       const sourceDataset = finalizedPlayers.length > 0 ? finalizedPlayers : WC2026_PLAYERS;
 
@@ -89,24 +85,29 @@ export async function POST(request: Request) {
 
         return {
           ...player,
-          tier: accurateTier,
+          tier: `Tier ${accurateTier}`, // FIX: This is now a string to stop React from crashing
+          base: determinedBasePrice,    // FIX: Using 'base' so the frontend can read the price properly
           basePrice: determinedBasePrice,
           currentBid: 0,
           status: 'unsold'
         };
       });
 
-      // Group and Shuffle
-      const t1 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 1));
-      const t2 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 2));
-      const t3 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 3));
-      const t4 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 4));
-      const t5 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 5));
+      // Filter based on the newly formatted string 'Tier 1'
+      const t1 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 1'));
+      const t2 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 2'));
+      const t3 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 3'));
+      const t4 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 4'));
+      const t5 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 5'));
 
       finalizedPlayers = [...t1, ...t2, ...t3, ...t4, ...t5];
     }
+    
+    // Safety Fallback if the array is empty for some reason
+    if (!finalizedPlayers || finalizedPlayers.length === 0) {
+       finalizedPlayers = [{ id: 'fallback-01', name: 'Database Loading Error', role: 'Unknown', country: 'Unknown', tier: 'Tier 5', base: 50, status: 'unsold', currentBid: 0 }];
+    }
 
-    // 4. Construct Final Room State (matches Firebase ServerRoom schema perfectly)
     const newRoom = {
       id: finalRoomId,
       name,
