@@ -57,7 +57,7 @@ export const QUIZ_DATA: Record<string, Question[]> = {
     { q: "In what year did Brazil win their first World Cup?", opts: ["1950", "1954", "1958", "1962"], a: "1958" },
     { q: "Which team did Brazil defeat in the 2002 World Cup final?", opts: ["France", "Germany", "Italy", "Spain"], a: "Germany" },
     { q: "Who scored both goals in the 2002 World Cup final?", opts: ["Rivaldo", "Ronaldinho", "Ronaldo", "Kaka"], a: "Ronaldo" },
-    { q: "Which Brazilian holds the record for most World Cup appearances (matches played) for the country?", opts: ["Cafu", "Roberto Carlos", "Pele", "Ronaldo"], a: "Cafu" },
+    { q: "Which Brazilian holds the record for most World Cup appearances for the country?", opts: ["Cafu", "Roberto Carlos", "Pele", "Ronaldo"], a: "Cafu" },
     { q: "Which country hosted the 1950 World Cup, where Brazil famously lost the final match?", opts: ["Uruguay", "Argentina", "Brazil", "Chile"], a: "Brazil" },
     { q: "Who was the captain of Brazil's 1970 World Cup-winning team?", opts: ["Pele", "Carlos Alberto", "Jairzinho", "Gerson"], a: "Carlos Alberto" },
     { q: "Which Brazilian player won the Golden Ball at the 1994 World Cup?", opts: ["Bebeto", "Romario", "Dunga", "Ronaldo"], a: "Romario" },
@@ -194,7 +194,7 @@ export const QUIZ_DATA: Record<string, Question[]> = {
     { q: "In what year did the Netherlands first reach a World Cup final?", opts: ["1970", "1974", "1978", "1982"], a: "1974" },
     { q: "Which Dutch player scored a spectacular 90th-minute winner against Argentina in the 1998 quarter-finals?", opts: ["Patrick Kluivert", "Edgar Davids", "Dennis Bergkamp", "Frank de Boer"], a: "Dennis Bergkamp" },
     { q: "Who won the Silver Ball as the tournament's second-best player in 2010?", opts: ["Arjen Robben", "Wesley Sneijder", "Robin van Persie", "Mark van Bommel"], a: "Wesley Sneijder" },
-    { q: "Which Dutch goalkeeper was famously substituted on specifically for the penalty shootout against Costa Rica in 2014?", opts: ["Jasper Cillessen", "Maarten Stekelenburg", "Tim Krul", "Edwin van der Sar"], a: "Tim Krul" },
+    { q: "Which Dutch goalkeeper was substituted on specifically for the penalty shootout against Costa Rica in 2014?", opts: ["Jasper Cillessen", "Maarten Stekelenburg", "Tim Krul", "Edwin van der Sar"], a: "Tim Krul" },
     { q: "Which team defeated the Netherlands in the 2010 World Cup final?", opts: ["Germany", "Brazil", "Spain", "France"], a: "Spain" },
     { q: "Who missed a crucial 1-on-1 breakaway chance against Iker Casillas in the 2010 final?", opts: ["Wesley Sneijder", "Robin van Persie", "Dirk Kuyt", "Arjen Robben"], a: "Arjen Robben" },
     { q: "Which team eliminated the Netherlands on penalties in the 2022 World Cup quarter-finals?", opts: ["Brazil", "Croatia", "Argentina", "France"], a: "Argentina" },
@@ -256,8 +256,82 @@ export const QUIZ_DATA: Record<string, Question[]> = {
     { q: "How many times has Norway qualified for the FIFA World Cup?", opts: ["Twice", "Three times", "Four times", "Five times"], a: "Three times" },
     { q: "In what year did Norway make their very first World Cup appearance?", opts: ["1938", "1954", "1982", "1994"], a: "1938" },
     { q: "Who was the manager of Norway during their successful runs in 1994 and 1998?", opts: ["Egil Olsen", "Age Hareide", "Nils Johan Semb", "Stale Solbakken"], a: "Egil Olsen" },
-    { q: "In 1994, Norway was eliminated in the group stage despite having the same points as every other team. How many points did they have?", opts: ["2", "3", "4", "5"], a: "4" },
+    { q: "In 1994, Norway was eliminated in the group stage despite having 4 points. Which team pipped them?", opts: ["Mexico", "Republic of Ireland", "Italy", "Argentina"], a: "Mexico" },
     { q: "Which team knocked Norway out in the Round of 16 at the 1998 World Cup?", opts: ["France", "Italy", "Germany", "Argentina"], a: "Italy" },
     { q: "Tore Andre Flo scored how many goals for Norway in the 1998 World Cup?", opts: ["1", "2", "3", "4"], a: "1" }
-  ]
+  ],
+  'Italy': [
+    { q: "How many World Cup titles has Italy won?", opts: ["2", "3", "4", "5"], a: "4" },
+    { q: "In what year did Italy win their first World Cup?", opts: ["1930", "1934", "1938", "1950"], a: "1934" },
+    { q: "Who managed Italy to their 2006 World Cup victory?", opts: ["Arrigo Sacchi", "Marcello Lippi", "Giovanni Trapattoni", "Roberto Mancini"], a: "Marcello Lippi" },
+    { q: "Which Italian player headbutted Marco Materazzi in the 2006 final?", opts: ["Francesco Totti", "Gennaro Gattuso", "Fabio Cannavaro", "Zinedine Zidane"], a: "Zinedine Zidane" },
+    { q: "Who won the Golden Ball for Best Player at the 2006 World Cup?", opts: ["Gianluigi Buffon", "Fabio Cannavaro", "Francesco Totti", "Andrea Pirlo"], a: "Fabio Cannavaro" },
+    { q: "Italy famously failed to qualify for which two consecutive World Cups?", opts: ["2010 & 2014", "2014 & 2018", "2018 & 2022", "2006 & 2010"], a: "2018 & 2022" },
+    { q: "Who scored the winning penalty for Italy in the 2006 final shootout?", opts: ["Alessandro Del Piero", "Andrea Pirlo", "Fabio Grosso", "Francesco Totti"], a: "Fabio Grosso" },
+    { q: "Which Italian striker won the Golden Boot at the 1990 World Cup held in Italy?", opts: ["Roberto Baggio", "Paolo Maldini", "Salvatore Schillaci", "Gianluca Vialli"], a: "Salvatore Schillaci" },
+    { q: "What is the nickname of the Italian national team?", opts: ["La Roja", "Die Mannschaft", "Azzurri", "Les Bleus"], a: "Azzurri" },
+    { q: "Who scored the winning extra-time goal for Italy against West Germany in the 1982 final?", opts: ["Paolo Rossi", "Marco Tardelli", "Alessandro Altobelli", "Bruno Conti"], a: "Alessandro Altobelli" },
+    { q: "Which Italian player scored a hat-trick against Brazil in the 1982 semi-final?", opts: ["Alessandro Altobelli", "Bruno Conti", "Paolo Rossi", "Giancarlo Antognoni"], a: "Paolo Rossi" },
+    { q: "Italy was knocked out of the 2022 qualification by which nation in a playoff?", opts: ["Portugal", "Switzerland", "North Macedonia", "Turkey"], a: "North Macedonia" }
+  ],
+  'Uruguay': [
+    { q: "How many World Cup titles has Uruguay won?", opts: ["1", "2", "3", "4"], a: "2" },
+    { q: "In what year did Uruguay win their second World Cup?", opts: ["1930", "1938", "1950", "1954"], a: "1950" },
+    { q: "What is the famous name for Uruguay's shocking 2-1 victory over Brazil in the 1950 final match?", opts: ["The Miracle of Bern", "The Maracanazo", "The Hand of God", "The Battle of Santiago"], a: "The Maracanazo" },
+    { q: "Which Uruguayan was controversially sent off after a goal-line handball in the 2010 quarter-final?", opts: ["Diego Forlan", "Luis Suarez", "Edinson Cavani", "Diego Lugano"], a: "Luis Suarez" },
+    { q: "Who won the Golden Ball at the 2010 World Cup for Uruguay?", opts: ["Luis Suarez", "Edinson Cavani", "Diego Forlan", "Diego Lugano"], a: "Diego Forlan" },
+    { q: "Which team eventually knocked Uruguay out in the 2010 semi-finals?", opts: ["Spain", "Germany", "Netherlands", "Brazil"], a: "Netherlands" },
+    { q: "Uruguay hosted and won the first-ever World Cup in which city's stadium?", opts: ["Punta del Este", "Salto", "Montevideo", "Colonia"], a: "Montevideo" },
+    { q: "What is the nickname of the Uruguayan national football team?", opts: ["La Albiceleste", "La Celeste", "Los Charruas", "El Tri"], a: "La Celeste" }
+  ],
+  'Morocco': [
+    { q: "Morocco became the first African/Arab nation to reach a World Cup semi-final in which year?", opts: ["2010", "2014", "2018", "2022"], a: "2022" },
+    { q: "Which team did Morocco defeat in the 2022 quarter-finals to reach the semis?", opts: ["Spain", "Portugal", "Belgium", "Croatia"], a: "Portugal" },
+    { q: "Who was the manager of Morocco during their historic 2022 World Cup run?", opts: ["Herve Renard", "Vahid Halilhodzic", "Walid Regragui", "Badou Zaki"], a: "Walid Regragui" },
+    { q: "Which team ended Morocco's 2022 World Cup run in the semi-finals?", opts: ["Argentina", "England", "France", "Croatia"], a: "France" },
+    { q: "Morocco goalkeeper Yassine Bounou was nicknamed what during the 2022 World Cup?", opts: ["The Wall", "Bono", "The Cat", "The Rock"], a: "Bono" },
+    { q: "In 1986, Morocco became the first African team to top a World Cup group. Who did they pip?", opts: ["England & Poland", "West Germany & Portugal", "France & USSR", "Brazil & Spain"], a: "England & Poland" },
+    { q: "Which Moroccan scored the dramatic late winner against Canada in the 2022 group stage?", opts: ["Hakim Ziyech", "Youssef En-Nesyri", "Achraf Hakimi", "Sofiane Boufal"], a: "Youssef En-Nesyri" },
+    { q: "What is the nickname of the Moroccan national football team?", opts: ["The Desert Foxes", "The Lions of the Atlas", "The Eagles", "The Pharaohs"], a: "The Lions of the Atlas" }
+  ],
+  'USA': [
+    { q: "What was the USA's best-ever World Cup finish?", opts: ["Winners", "Runners-up", "3rd Place", "Quarter-finals"], a: "3rd Place" },
+    { q: "In what year did the USA achieve their best World Cup finish?", opts: ["1930", "1950", "1994", "2002"], a: "1930" },
+    { q: "Who did the USA famously defeat 1-0 in the 1950 World Cup group stage?", opts: ["France", "England", "Brazil", "Italy"], a: "England" },
+    { q: "Which USA player scored against Portugal, Ghana, and Belgium in their 2014 World Cup run?", opts: ["Landon Donovan", "Clint Dempsey", "Tim Howard", "Michael Bradley"], a: "Clint Dempsey" },
+    { q: "Which US goalkeeper made a record 16 saves against Belgium in the 2014 Round of 16?", opts: ["Brad Friedel", "Kasey Keller", "Tim Howard", "Brad Guzan"], a: "Tim Howard" },
+    { q: "Who scored the USA's famous late winner against Algeria in the 2010 World Cup?", opts: ["Clint Dempsey", "Jozy Altidore", "Tim Howard", "Landon Donovan"], a: "Landon Donovan" },
+    { q: "In 2022, who scored the USA's opening goal against Wales?", opts: ["Christian Pulisic", "Tyler Adams", "Timothy Weah", "Weston McKennie"], a: "Timothy Weah" },
+    { q: "Which team knocked the USA out of the 2022 World Cup Round of 16?", opts: ["England", "Mexico", "Netherlands", "Argentina"], a: "Netherlands" }
+  ],
+  'Japan': [
+    { q: "Japan shocked the world in 2022 by defeating which two former World Cup winners in the group stage?", opts: ["France & England", "Germany & Spain", "Italy & Brazil", "Argentina & Portugal"], a: "Germany & Spain" },
+    { q: "In what year did Japan co-host the World Cup?", opts: ["1998", "2002", "2006", "2010"], a: "2002" },
+    { q: "Which team knocked Japan out of the 2022 World Cup on penalties?", opts: ["Spain", "Germany", "Croatia", "Brazil"], a: "Croatia" },
+    { q: "Japan's best ever World Cup finish is the quarter-finals, achieved in which year?", opts: ["2002", "2010", "2018", "2022"], a: "2002" },
+    { q: "Which Japanese player is known as 'The Prince' and plays for Real Madrid?", opts: ["Shinji Kagawa", "Keisuke Honda", "Takefusa Kubo", "Junya Ito"], a: "Takefusa Kubo" },
+    { q: "Japan went viral in 2022 for doing what after their matches at the World Cup?", opts: ["Dancing in the stands", "Cleaning the stadium", "Giving gifts to opponents", "Singing national anthems"], a: "Cleaning the stadium" },
+    { q: "Which Japanese striker scored in both the Germany and Spain upsets in 2022?", opts: ["Kaoru Mitoma", "Ritsu Doan", "Daizen Maeda", "Takumi Minamino"], a: "Ritsu Doan" },
+    { q: "What is the nickname of the Japanese national football team?", opts: ["The Samurai Blue", "The Rising Sun", "The Cherry Blossoms", "The Dragons"], a: "The Samurai Blue" }
+  ],
+  'South Korea': [
+    { q: "South Korea achieved their best-ever World Cup finish as co-hosts in 2002. What was it?", opts: ["Winners", "Runners-up", "3rd Place", "4th Place"], a: "4th Place" },
+    { q: "Who was the charismatic manager who guided South Korea to the 2002 semi-finals?", opts: ["Kim Ho", "Guus Hiddink", "Dick Advocaat", "Uli Stielike"], a: "Guus Hiddink" },
+    { q: "Which European giant did South Korea shock in the 2022 group stage with a 2-1 comeback win?", opts: ["France", "Germany", "Portugal", "Spain"], a: "Portugal" },
+    { q: "Who scored the dramatic 91st-minute winner for South Korea against Portugal in 2022?", opts: ["Son Heung-min", "Hwang Hee-chan", "Cho Gue-sung", "Lee Jae-sung"], a: "Hwang Hee-chan" },
+    { q: "South Korea controversially eliminated which tournament favourite in the 2002 quarter-finals?", opts: ["France", "Germany", "Spain", "Italy"], a: "Spain" },
+    { q: "Which team defeated South Korea in the 2002 semi-finals?", opts: ["Brazil", "Turkey", "Germany", "Senegal"], a: "Germany" },
+    { q: "What is the nickname of the South Korean national team?", opts: ["The Tigers", "The Taegeuk Warriors", "The Red Rockets", "The Dragons"], a: "The Taegeuk Warriors" },
+    { q: "Which South Korean star plays for Tottenham Hotspur and captained the 2022 World Cup team?", opts: ["Park Ji-sung", "Lee Chung-yong", "Son Heung-min", "Ki Sung-yueng"], a: "Son Heung-min" }
+  ],
+  'Senegal': [
+    { q: "Senegal caused the biggest upset of the 2002 World Cup opener by defeating which reigning champion?", opts: ["Brazil", "Germany", "France", "Italy"], a: "France" },
+    { q: "What was Senegal's best-ever World Cup finish?", opts: ["Winners", "Semi-finals", "Quarter-finals", "Round of 16"], a: "Quarter-finals" },
+    { q: "Who scored Senegal's winning goal against France in the 2002 group stage?", opts: ["El Hadji Diouf", "Khalilou Fadiga", "Papa Bouba Diop", "Henri Camara"], a: "Papa Bouba Diop" },
+    { q: "Which team knocked Senegal out of the 2002 World Cup quarter-finals with a golden goal?", opts: ["Spain", "Germany", "Turkey", "Sweden"], a: "Turkey" },
+    { q: "Senegal was eliminated from the 2022 World Cup group stage after losing their captain to injury. Who was he?", opts: ["Kalidou Koulibaly", "Idrissa Gueye", "Sadio Mane", "Edouard Mendy"], a: "Sadio Mane" },
+    { q: "Senegal qualified for the 2022 Round of 16 by defeating which host nation?", opts: ["Qatar", "Ecuador", "Netherlands", "USA"], a: "Qatar" },
+    { q: "Which team eliminated Senegal from the 2022 World Cup Round of 16?", opts: ["France", "Brazil", "England", "Netherlands"], a: "England" },
+    { q: "What is the nickname of the Senegalese national football team?", opts: ["The Teranga Lions", "The Lions of Africa", "The Striped Lions", "Les Lionceaux"], a: "The Teranga Lions" }
+  ],
 };

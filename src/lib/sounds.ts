@@ -67,45 +67,23 @@ export function playSoldSound() {
   if (!ctx) return;
   const now = ctx.currentTime;
 
-  // 1. The sharp "crack" of the wood
-  const osc1 = ctx.createOscillator();
-  const gain1 = ctx.createGain();
-  osc1.type = 'triangle';
-  osc1.frequency.setValueAtTime(800, now);
-  osc1.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-  gain1.gain.setValueAtTime(0, now);
-  gain1.gain.linearRampToValueAtTime(1, now + 0.01);
-  gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-  osc1.connect(gain1); gain1.connect(ctx.destination);
-  osc1.start(now); osc1.stop(now + 0.1);
+  // Three ascending notes: C5 → E5 → G5 (perfect major chord arpeggio)
+  const notes = [523.25, 659.25, 783.99];
 
-  // 2. The deep "thunk" resonance of the block
-  const osc2 = ctx.createOscillator();
-  const gain2 = ctx.createGain();
-  osc2.type = 'sine';
-  osc2.frequency.setValueAtTime(300, now);
-  osc2.frequency.exponentialRampToValueAtTime(50, now + 0.15);
-  gain2.gain.setValueAtTime(0, now);
-  gain2.gain.linearRampToValueAtTime(1.5, now + 0.02);
-  gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-  osc2.connect(gain2); gain2.connect(ctx.destination);
-  osc2.start(now); osc2.stop(now + 0.2);
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-  // 3. Short high-frequency noise burst for impact realism
-  const bufferSize = ctx.sampleRate * 0.1;
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for(let i=0; i<bufferSize; i++) data[i] = Math.random() * 2 - 1;
-  const noise = ctx.createBufferSource();
-  noise.buffer = buffer;
-  const noiseFilter = ctx.createBiquadFilter();
-  noiseFilter.type = 'bandpass';
-  noiseFilter.frequency.value = 1000;
-  noiseFilter.Q.value = 1;
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0, now);
-  noiseGain.gain.linearRampToValueAtTime(1.5, now + 0.01);
-  noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-  noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(ctx.destination);
-  noise.start(now); noise.stop(now + 0.1);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + i * 0.18);
+
+    gain.gain.setValueAtTime(0, now + i * 0.18);
+    gain.gain.linearRampToValueAtTime(0.4, now + i * 0.18 + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.18 + 1.2);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now + i * 0.18);
+    osc.stop(now + i * 0.18 + 1.2);
+  });
 }
