@@ -43,7 +43,16 @@ interface JoinRoomDetails {
   }>;
 }
 
-// Country Flag Mapper
+const formatCurrency = (lakhs: number | string | null | undefined) => {
+  const num = Number(lakhs);
+  if (isNaN(num)) return '₹0L';
+  if (num >= 100) {
+    const cr = num / 100;
+    return `₹${Number.isInteger(cr) ? cr : cr.toFixed(2)}Cr`;
+  }
+  return `₹${num}L`;
+};
+
 const FLAGS: Record<string, string> = {
   'Argentina': '🇦🇷', 'France': '🇫🇷', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Brazil': '🇧🇷',
   'Spain': '🇪🇸', 'Germany': '🇩🇪', 'Portugal': '🇵🇹', 'Netherlands': '🇳🇱',
@@ -75,8 +84,8 @@ const overlayStyle: CSSProperties = {
   backdropFilter: 'blur(8px)',
   display: 'flex',
   overflowY: 'auto',
-  zIndex: 1000,
-  padding: 16,
+  zIndex: 999, // Behind the 1000 index global header
+  padding: '80px 16px 16px', // Padding so header doesn't cover content
 };
 
 const modalStyle: CSSProperties = {
@@ -93,13 +102,12 @@ const modalStyle: CSSProperties = {
   padding: 24,
 };
 
-// Custom Hook to animate the stat numbers seamlessly
 function AnimatedStat({ target, label, suffix = '', prefix = '', decimals = 0, isK = false }: any) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
     let start = 0;
-    const duration = 2000; // Animation lasts 2 seconds
+    const duration = 2000;
     const fps = 60;
     const increment = target / ((duration / 1000) * fps);
 
@@ -165,10 +173,6 @@ function Label({ children }: { children: ReactNode }) {
   );
 }
 
-function formatCreatedAt(createdAt: number) {
-  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(createdAt);
-}
-
 export default function Landing({
   userId,
   authSession,
@@ -191,6 +195,7 @@ export default function Landing({
   const [selectedTournament, setSelectedTournament] = useState('FIFA World Cup 2026');
   const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loginIntent, setLoginIntent] = useState<'nav' | 'host'>('nav');
   const [roomCode, setRoomCode] = useState('');
   const [userName, setUserName] = useState('');
@@ -317,26 +322,6 @@ export default function Landing({
     catch (e: unknown) { setLoginError(e instanceof Error ? e.message : 'Login failed'); }
   }
 
-  function submitManagedUser() {
-    if (!settingsForm.userId.trim() || !settingsForm.password.trim()) { setSettingsError('Add both a user ID and password'); return; }
-    try {
-      onCreateUser(settingsForm.userId, settingsForm.password);
-      setSettingsForm({ userId: '', password: '' }); setSettingsError('');
-      setSettingsMessage(`User ${settingsForm.userId.trim().toLowerCase()} created and activated`);
-    } catch (e: unknown) {
-      setSettingsMessage(''); setSettingsError(e instanceof Error ? e.message : 'Failed to create user');
-    }
-  }
-
-  function handleToggleManagedUser(targetUserId: string, active: boolean) {
-    try {
-      onToggleUser(targetUserId); setSettingsError('');
-      setSettingsMessage(`${targetUserId} ${active ? 'deactivated' : 'activated'} successfully`);
-    } catch (e: unknown) {
-      setSettingsMessage(''); setSettingsError(e instanceof Error ? e.message : 'Failed to update user');
-    }
-  }
-
   const masterCountriesList = Array.from(new Set(WC2026_PLAYERS.map((p: any) => p.country || p.nationality || 'Unknown'))).sort() as string[];
 
   const filteredPlayers = WC2026_PLAYERS.filter((player: any) => {
@@ -379,7 +364,7 @@ export default function Landing({
         .global-sticky-header {
           position: sticky;
           top: 0;
-          z-index: 1000;
+          z-index: 10000;
           background: rgba(5, 7, 14, 0.95);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--bd);
@@ -427,9 +412,13 @@ export default function Landing({
 
         .landing-body { flex-direction: row; }
         .landing-sidebar { width: clamp(260px, 25vw, 340px); border-right: 1px solid var(--bd); padding: 24px 20px; overflow-y: auto; background: rgba(0,0,0,0.15); }
-        .nav-container { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px clamp(16px,4vw,40px); }
-        .nav-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
-        .nav-link { background: transparent; border: none; color: var(--t2); font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; }
+        
+        /* Mobile Menu Nav Styles */
+        .nav-container { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; flex-wrap: wrap; }
+        .desktop-nav { display: flex; gap: 12px; align-items: center; }
+        .mobile-menu-btn { display: none; background: transparent; border: none; color: var(--t1); font-size: 24px; cursor: pointer; padding: 0 8px; }
+        .mobile-nav { display: none; width: 100%; flex-direction: column; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bd2); }
+        .nav-link { background: transparent; border: none; color: var(--t2); font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; padding: 8px 12px; border-radius: 6px; transition: all 0.2s; text-align: left; }
         .nav-link:hover { color: var(--t1); background: var(--bg3); }
         
         .squads-matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; width: 100%; margin-top: 20px; }
@@ -446,10 +435,13 @@ export default function Landing({
           .fixtures-container-split { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 900px) {
+          .desktop-nav { display: none !important; } 
+          .mobile-menu-btn { display: block; } 
+          .mobile-nav.open { display: flex; }
+
           .landing-body { flex-direction: column !important; }
           .landing-sidebar { width: 100% !important; border-right: none !important; border-top: 1px solid var(--bd); height: auto; }
           .hero-title { font-size: clamp(60px, 15vw, 90px) !important; }
-          .nav-actions { justify-content: center !important; width: 100%; margin-top: 8px; }
           .modal-content { padding: 16px !important; }
           .stat-blocks { margin-top: 24px !important; gap: 16px !important; }
           .squads-matrix { grid-template-columns: 1fr !important; }
@@ -485,7 +477,7 @@ export default function Landing({
             </a>
             {authSession && (
               <span
-                className="tag"
+                className="tag hide-mobile"
                 style={{
                   background: authSession.isAdmin ? 'rgba(245,158,11,0.12)' : 'rgba(0,220,114,0.1)',
                   color: authSession.isAdmin ? 'var(--am)' : 'var(--g)',
@@ -498,8 +490,9 @@ export default function Landing({
               </span>
             )}
           </div>
-          <div className="nav-actions">
-            
+          
+          {/* DESKTOP NAV */}
+          <div className="desktop-nav">
             <div style={{ position: 'relative', paddingBottom: '12px', marginBottom: '-12px' }} onMouseEnter={() => setShowQuizMenu(true)} onMouseLeave={() => setShowQuizMenu(false)}>
               <button className="nav-link">🏆 Quiz ▾</button>
               {showQuizMenu && (
@@ -548,6 +541,32 @@ export default function Landing({
               <button className="btn bp bsm" onClick={() => openLogin('nav')}>Login</button>
             )}
           </div>
+
+          {/* MOBILE NAV BUTTON */}
+          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+            {isMobileMenuOpen ? '✕' : '☰'}
+          </button>
+
+          {/* MOBILE NAV DROPDOWN */}
+          {isMobileMenuOpen && (
+            <div className="mobile-nav open">
+              <button className="nav-link" onClick={() => { setQuizCategory('General World Cup'); setShowQuiz(true); setIsMobileMenuOpen(false); }}>🏆 Play World Cup Quiz</button>
+              <button className="nav-link" onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowSquads(true); setIsMobileMenuOpen(false); }}>👕 Squads & Teams</button>
+              <button className="nav-link" onClick={() => { setSelectedTournament('FIFA World Cup 2026'); setShowFixtures(true); setIsMobileMenuOpen(false); }}>📅 Fixtures & Results</button>
+              
+              <div style={{ height: 1, background: 'var(--bd2)', margin: '8px 0' }} />
+              
+              <button className="btn bs" style={{ width: '100%' }} onClick={() => { setShowJoin(true); setIsMobileMenuOpen(false); }}>Join Room</button>
+              {authSession ? (
+                <>
+                  <button className="btn bp" style={{ width: '100%' }} onClick={() => { onStart(); setIsMobileMenuOpen(false); }}>Create Room</button>
+                  <button className="btn bs" style={{ width: '100%' }} onClick={() => { onLogout(); setIsMobileMenuOpen(false); }}>Logout</button>
+                </>
+              ) : (
+                <button className="btn bp" style={{ width: '100%' }} onClick={() => { openLogin('nav'); setIsMobileMenuOpen(false); }}>Login</button>
+              )}
+            </div>
+          )}
         </nav>
       </header>
 
@@ -587,7 +606,6 @@ export default function Landing({
               SPORTS<br />AUCTION<br /><span style={{ color: 'var(--g)' }}>ROOM</span>
             </h1>
 
-            {/* PLNN Integration Badge */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 28 }}>
               <span style={{ fontSize: 12, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>In Association With</span>
               <a href="https://premierleaguenewsnow.com" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: 8, border: '1px solid var(--bd2)', fontSize: 13, fontFamily: "'Rajdhani', sans-serif", fontWeight: 'bold', color: 'var(--t1)', textDecoration: 'none', transition: 'all 0.2s ease', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg3)'; e.currentTarget.style.borderColor = 'var(--g)'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'var(--bd2)'; }}>
@@ -612,7 +630,6 @@ export default function Landing({
               </div>
             )}
             
-            {/* UNIFORM ANIMATED COUNTERS */}
             <div className="stat-blocks" style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 48, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               <AnimatedStat target={2400} label="Auctions" suffix="+" />
               <AnimatedStat target={18} label="Players Sold" suffix="K+" isK={true} />
@@ -652,9 +669,8 @@ export default function Landing({
 
       {showQuiz && <WorldCupQuiz category={quizCategory} onClose={() => setShowQuiz(false)} />}
 
-      {/* DYNAMIC FIXTURES OVERLAY MODULE */}
       {showFixtures && (
-        <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
+        <div style={{ ...overlayStyle, display: 'block', padding: '100px 24px 40px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 1300, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--bd)', paddingBottom: 16, marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
@@ -666,12 +682,7 @@ export default function Landing({
               </div>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <select 
-                  className="inp" 
-                  value={selectedTournament} 
-                  onChange={(e) => setSelectedTournament(e.target.value)}
-                  style={{ minWidth: 240, height: 40, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}
-                >
+                <select className="inp" value={selectedTournament} onChange={(e) => setSelectedTournament(e.target.value)} style={{ minWidth: 240, height: 40, fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>
                   <option value="FIFA World Cup 2026">FIFA World Cup 2026</option>
                 </select>
                 <button onClick={() => setShowFixtures(false)} style={{ background: 'var(--bg3)', border: '1px solid var(--bd)', color: 'var(--t1)', width: 40, height: 40, borderRadius: 8, cursor: 'pointer', fontSize: 16, fontWeight: 'bold' }}>✕</button>
@@ -813,9 +824,8 @@ export default function Landing({
         </div>
       )}
 
-      {/* SQUADS OVERLAY */}
       {showSquads && (
-        <div style={{ ...overlayStyle, display: 'block', padding: '40px 24px' }}>
+        <div style={{ ...overlayStyle, display: 'block', padding: '100px 24px 40px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 1340, margin: '0 auto', padding: 28, background: 'var(--bg)', border: '1px solid var(--bd2)', animation: 'fadeUp 0.3s ease' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--bd)', paddingBottom: 16, marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
               <div>
@@ -911,9 +921,12 @@ export default function Landing({
                                         <b>{player.name}</b> 
                                         {player.club ? <span style={{ color: 'var(--t3)', fontSize: 11 }}> | {player.club}</span> : null}
                                       </div>
-                                      <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: hybridTier === 1 ? 'rgba(0,220,114,0.12)' : hybridTier === 2 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)', color: hybridTier === 1 ? 'var(--g)' : hybridTier === 2 ? 'var(--am)' : 'var(--t2)', flexShrink: 0 }}>
-                                        Tier {hybridTier}
-                                      </span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                        <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 15, color: 'var(--g)', letterSpacing: 1 }}>{formatCurrency(player.base || 50)}</span>
+                                        <span style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: hybridTier === 1 ? 'rgba(0,220,114,0.12)' : hybridTier === 2 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.06)', color: hybridTier === 1 ? 'var(--g)' : hybridTier === 2 ? 'var(--am)' : 'var(--t2)' }}>
+                                          Tier {hybridTier}
+                                        </span>
+                                      </div>
                                     </div>
                                   );
                                 })}
@@ -978,7 +991,7 @@ export default function Landing({
                   <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, color: 'var(--g)', letterSpacing: 1 }}>{roomDetails.name}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--t2)', marginTop: 4, gap: 12, flexWrap: 'wrap' }}>
                     <span>🏆 {roomDetails.tournament} ({roomDetails.sport})</span>
-                    <span>💰 Budget: ₹{roomDetails.budget}L</span>
+                    <span>💰 Budget: {formatCurrency(roomDetails.budget)}</span>
                   </div>
                 </div>
 
@@ -1049,7 +1062,6 @@ export default function Landing({
             
             <button className="btn bp" onClick={submitLogin} style={{ width: '100%', padding: 12 }}>Login →</button>
 
-            {/* Email Contact Box in Login Modal */}
             <div style={{ marginTop: 4, padding: '16px', background: 'rgba(0,220,114,0.05)', border: '1px solid rgba(0,220,114,0.15)', borderRadius: 8, textAlign: 'center' }}>
               <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--t1)', marginBottom: 4 }}>Want to host your own auction?</div>
               <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 12 }}>Get in touch with us to create your custom host account.</div>

@@ -4,7 +4,23 @@ import { getRoom, saveRoom } from '@/lib/db';
 
 const BID_TIMER_MS = 30000; 
 const BID_EXTENSION_MS = 15000; 
+const MIN_BASE_PRICE = 2000000; // 20 Lakhs is the minimum reserved for empty spots
+
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
+
+const formatCurrency = (val: number | string | null | undefined) => {
+  const num = Number(val);
+  if (isNaN(num)) return '₹0L';
+  if (num >= 10000000) {
+    const cr = num / 10000000;
+    return `₹${Number.isInteger(cr) ? cr : cr.toFixed(2)}Cr`;
+  }
+  if (num >= 100000) {
+    const lk = num / 100000;
+    return `₹${Number.isInteger(lk) ? lk : lk.toFixed(2)}L`;
+  }
+  return `₹${num.toLocaleString()}`;
+};
 
 export async function POST(
   req: Request,
@@ -23,7 +39,7 @@ export async function POST(
 
     room.participants = toArr(room.participants).map((p: any) => ({
       ...p,
-      budget: p.budget || room.budget || 10000,
+      budget: p.budget || room.budget || 1000000000,
       spent: p.spent || 0,
       squad: toArr(p.squad)
     }));
@@ -38,35 +54,25 @@ export async function POST(
     const now = Date.now();
 
     switch (action.type) {
-      // --- HOST CONTROLS ---
       case 'PAUSE': {
         if (room.hostId !== userId) return NextResponse.json({ error: 'Only host can pause' }, { status: 403 });
-        
-        // Capture the exact milliseconds remaining on the clock
         const remainingMs = room.endsAt ? Math.max(0, room.endsAt - now) : 30000;
-        
         room.phase = 'paused';
-        room.timeLeft = remainingMs; // Temporarily store the remaining time
+        room.timeLeft = remainingMs; 
         room.endsAt = null;
         room.chat.push({ id: now, user: 'System', msg: '⏸️ Auction paused by host.' });
         room.chat = room.chat.slice(-60);
-        
         await saveRoom(room, { skipPlayers: true });
         break;
       }
       case 'RESUME': {
         if (room.hostId !== userId) return NextResponse.json({ error: 'Only host can resume' }, { status: 403 });
-        
-        // Take the exact paused time and add a 3 second (3000ms) buffer
         const resumeMs = (room.timeLeft || 0) + 3000;
-        
         room.phase = 'bidding';
         room.endsAt = now + resumeMs;
-        room.timeLeft = 0; // Clear the temporary storage
-        
+        room.timeLeft = 0; 
         room.chat.push({ id: now, user: 'System', msg: '▶️ Auction resumed (+3s)' });
         room.chat = room.chat.slice(-60);
-        
         await saveRoom(room, { skipPlayers: true });
         break;
       }
@@ -80,7 +86,6 @@ export async function POST(
         break;
       }
 
-      // --- STANDARD LOOP ---
       case 'ADVANCE': {
         if (!room.endsAt || now < (room.endsAt - 2000)) break; 
         let updated = false;
@@ -96,7 +101,7 @@ export async function POST(
               win.spent = (win.spent || 0) + (room.currentBid || 0); 
             }
             room.soldLog.push({ player: pl, price: room.currentBid || 0, buyer: room.currentBidder });
-            room.chat.push({ id: now, user: 'System', msg: `🔨 SOLD! ${pl?.name || 'Player'} for ₹${room.currentBid}L.` });
+            room.chat.push({ id: now, user: 'System', msg: `🔨 SOLD! ${pl?.name || 'Player'} for ${formatCurrency(room.currentBid)}.` });
           } else {
             room.phase = 'unsold';
             room.endsAt = now + 2500;
@@ -108,18 +113,31 @@ export async function POST(
         } 
         else if (room.phase === 'sold' || room.phase === 'unsold') {
           room.playerIdx++;
+          
           if (room.playerIdx >= room.players.length) {
-            room.phase = 'done';
-            room.endsAt = null;
-            room.chat.push({ id: now, user: 'System', msg: `🏆 Auction has concluded!` });
-            room.chat = room.chat.slice(-60);
+            if (room.unsoldLog.length > 0) {
+              room.players = [...room.unsoldLog];
+              room.unsoldLog = []; 
+              room.playerIdx = 0;
+              room.phase = 'bidding';
+              room.currentBid = room.players[0]?.base || 5000000;
+              room.currentBidder = null;
+              room.passedBy = [];
+              room.endsAt = now + BID_TIMER_MS;
+              room.chat.push({ id: now, user: 'System', msg: `🔄 ROTATION: Unsold players are being presented again!` });
+            } else {
+              room.phase = 'done';
+              room.endsAt = null;
+              room.chat.push({ id: now, user: 'System', msg: `🏆 Auction has concluded!` });
+            }
           } else {
             room.phase = 'bidding';
-            room.currentBid = room.players[room.playerIdx]?.base || 50; 
+            room.currentBid = room.players[room.playerIdx]?.base || 5000000; 
             room.currentBidder = null;
             room.passedBy = [];
             room.endsAt = now + BID_TIMER_MS;
           }
+          room.chat = room.chat.slice(-60);
           updated = true;
         }
 
@@ -133,7 +151,7 @@ export async function POST(
 
         room.phase = 'bidding';
         room.playerIdx = 0;
-        room.currentBid = room.players[0]?.base || 50;
+        room.currentBid = room.players[0]?.base || 5000000;
         room.currentBidder = null;
         room.passedBy = [];
         room.endsAt = now + BID_TIMER_MS;
@@ -154,7 +172,25 @@ export async function POST(
         if (room.passedBy.includes(bidder)) return NextResponse.json({ error: 'You passed on this player' }, { status: 400 });
 
         const nextBidVal = (room.currentBid || 0) + amount;
+        
         if (team.spent + nextBidVal > team.budget) return NextResponse.json({ error: 'Insufficient budget' }, { status: 400 });
+
+        const spotsLeft = room.squadSize - (team.squad || []).length;
+        
+        // Strict Squad Complete Check
+        if (spotsLeft <= 0) {
+            return NextResponse.json({ error: 'Squad is fully complete. You cannot bid on anymore players.' }, { status: 400 });
+        }
+
+        if (spotsLeft > 0) {
+          const budgetLeft = team.budget - team.spent;
+          const reservedForOthers = (spotsLeft - 1) * MIN_BASE_PRICE;
+          const maxBidAllowed = budgetLeft - reservedForOthers;
+          
+          if (nextBidVal > maxBidAllowed) {
+             return NextResponse.json({ error: 'Budget Protection Limit Hit.' }, { status: 400 });
+          }
+        }
 
         room.currentBid = nextBidVal;
         room.currentBidder = bidder;
@@ -209,7 +245,7 @@ export async function POST(
             const winner = room.participants.find((p: any) => p.id === room.currentBidder);
             room.phase = 'sold';
             room.endsAt = now + 1500;
-            room.chat.push({ id: now + 1, user: 'System', msg: `🔨 SOLD! ${room.players[room.playerIdx]?.name ?? 'Player'} to ${winner?.name ?? 'the bidder'} for ₹${room.currentBid}L.` });
+            room.chat.push({ id: now + 1, user: 'System', msg: `🔨 SOLD! ${room.players[room.playerIdx]?.name ?? 'Player'} to ${winner?.name ?? 'the bidder'} for ${formatCurrency(room.currentBid)}.` });
           }
 
           room.chat = room.chat.slice(-60);
@@ -221,10 +257,8 @@ export async function POST(
       case 'CHAT': {
         const { msg, user } = action;
         if (!msg || !msg.trim()) return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 });
-
         room.chat.push({ id: now, user: user || 'Guest', msg: msg.trim() });
         room.chat = room.chat.slice(-60);
-        
         await saveRoom(room, { skipPlayers: true });
         break;
       }

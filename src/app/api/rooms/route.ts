@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     }
 
     const finalRoomId = roomId || Math.random().toString(36).substring(2, 8).toUpperCase();
-    const initialBudget = budget || 10000;
+    const initialBudget = budget || 1000000000;
 
     const processedTeams: Record<string, any> = {};
     for (const [key, teamData] of Object.entries(teams)) {
@@ -71,41 +71,55 @@ export async function POST(request: Request) {
 
     let finalizedPlayers = players || [];
 
-    if (sport.toLowerCase().includes('football') || sport.toLowerCase().includes('fifa')) {
-      const sourceDataset = finalizedPlayers.length > 0 ? finalizedPlayers : WC2026_PLAYERS;
+    // If client sent their own players (via CreateRoom.tsx), DO NOT OVERWRITE THEIR VALUES
+    if (finalizedPlayers.length > 0) {
+        finalizedPlayers = finalizedPlayers.map((player: any) => ({
+           ...player,
+           basePrice: player.base || player.basePrice || 5000000,
+           currentBid: 0,
+           status: 'unsold'
+        }));
+    } else {
+        // Only load default dataset if client somehow sent 0 players
+        if (sport.toLowerCase().includes('football') || sport.toLowerCase().includes('fifa')) {
+          const sourceDataset = WC2026_PLAYERS || [];
+          finalizedPlayers = sourceDataset.map((player: any) => {
+            const accurateTier = calculateHybridTier(player);
+            let determinedBasePrice = 2000000; 
+            if (accurateTier === 1) determinedBasePrice = 20000000;      
+            if (accurateTier === 2) determinedBasePrice = 15000000;      
+            if (accurateTier === 3) determinedBasePrice = 10000000;      
+            if (accurateTier === 4) determinedBasePrice = 5000000;       
 
-      const processedPlayers = sourceDataset.map((player: any) => {
-        const accurateTier = calculateHybridTier(player);
-        let determinedBasePrice = 20; 
-        if (accurateTier === 1) determinedBasePrice = 200;      
-        if (accurateTier === 2) determinedBasePrice = 150;      
-        if (accurateTier === 3) determinedBasePrice = 100;      
-        if (accurateTier === 4) determinedBasePrice = 50;       
-        if (accurateTier === 5) determinedBasePrice = 20;       
+            return {
+              ...player,
+              tier: `Tier ${accurateTier}`,
+              base: determinedBasePrice,
+              basePrice: determinedBasePrice,
+              currentBid: 0,
+              status: 'unsold'
+            };
+          });
+        }
+    }
 
-        return {
-          ...player,
-          tier: `Tier ${accurateTier}`, // FIX: This is now a string to stop React from crashing
-          base: determinedBasePrice,    // FIX: Using 'base' so the frontend can read the price properly
-          basePrice: determinedBasePrice,
-          currentBid: 0,
-          status: 'unsold'
-        };
-      });
-
-      // Filter based on the newly formatted string 'Tier 1'
-      const t1 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 1'));
-      const t2 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 2'));
-      const t3 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 3'));
-      const t4 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 4'));
-      const t5 = shuffleArray(processedPlayers.filter((p: any) => p.tier === 'Tier 5'));
-
-      finalizedPlayers = [...t1, ...t2, ...t3, ...t4, ...t5];
+    // Safely Shuffle Based on Tiers (if tiers exist)
+    const hasTiers = finalizedPlayers.some((p: any) => p.tier && p.tier.toString().trim() !== '');
+    if (hasTiers) {
+        const t1 = shuffleArray(finalizedPlayers.filter((p: any) => p.tier === 'Tier 1' || p.tier === '1'));
+        const t2 = shuffleArray(finalizedPlayers.filter((p: any) => p.tier === 'Tier 2' || p.tier === '2'));
+        const t3 = shuffleArray(finalizedPlayers.filter((p: any) => p.tier === 'Tier 3' || p.tier === '3'));
+        const t4 = shuffleArray(finalizedPlayers.filter((p: any) => p.tier === 'Tier 4' || p.tier === '4'));
+        const t5 = shuffleArray(finalizedPlayers.filter((p: any) => p.tier === 'Tier 5' || p.tier === '5'));
+        const noT = shuffleArray(finalizedPlayers.filter((p: any) => !p.tier || p.tier.toString().trim() === ''));
+        finalizedPlayers = [...t1, ...t2, ...t3, ...t4, ...t5, ...noT];
+    } else {
+        finalizedPlayers = shuffleArray(finalizedPlayers);
     }
     
-    // Safety Fallback if the array is empty for some reason
+    // Safety Fallback
     if (!finalizedPlayers || finalizedPlayers.length === 0) {
-       finalizedPlayers = [{ id: 'fallback-01', name: 'Database Loading Error', role: 'Unknown', country: 'Unknown', tier: 'Tier 5', base: 50, status: 'unsold', currentBid: 0 }];
+       finalizedPlayers = [{ id: 'fallback-01', name: 'Database Loading Error', role: 'Unknown', country: 'Unknown', tier: '', base: 5000000, status: 'unsold', currentBid: 0 }];
     }
 
     const newRoom = {
