@@ -262,6 +262,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
   const me = safeParticipants.find((p) => p.id === teamId) || safeParticipants[0];
   const spotsLeft = roomState.squadSize - (me?.squad || []).length;
   const budgetLeft = (me?.budget || 0) - (me?.spent || 0);
+  const spentPct = (me?.spent || 0) / (me?.budget || 1);
   const maxBidAllowed = spotsLeft > 0 ? budgetLeft - ((spotsLeft - 1) * MIN_BASE_PRICE) : 0;
 
   const renderMobileHeader = () => (
@@ -283,7 +284,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
         </div>
         
         <div className="desktop-nav">
-          <button className="nav-link" onClick={() => window.open('/rules', '_blank')}>📜 Rules ↗</button>
           <button className="nav-link" onClick={() => window.open('/', '_blank')}>🏆 Quiz ↗</button>
           <button className="nav-link" onClick={() => window.open('/', '_blank')}>👕 Squads ↗</button>
           <button className="nav-link" onClick={() => window.open('/', '_blank')}>📅 Fixtures ↗</button>
@@ -295,7 +295,6 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
 
         {isMobileMenuOpen && (
           <div className="mobile-nav open">
-            <button className="nav-link" onClick={() => { setIsMobileMenuOpen(false); window.open('/rules', '_blank'); }}>📜 Rules ↗</button>
             <button className="nav-link" onClick={() => { setIsMobileMenuOpen(false); window.open('/', '_blank'); }}>🏆 Quiz ↗</button>
             <button className="nav-link" onClick={() => { setIsMobileMenuOpen(false); window.open('/', '_blank'); }}>👕 Squads & Teams ↗</button>
             <button className="nav-link" onClick={() => { setIsMobileMenuOpen(false); window.open('/', '_blank'); }}>📅 Fixtures & Results ↗</button>
@@ -586,6 +585,11 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     <div style={{ width: 64, height: 64, borderRadius: 12, background: (ROLE_COLORS[pl.role] || '#888') + '22', border: `2px solid ${ROLE_COLORS[pl.role] || '#888'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue', sans-serif", fontSize: 16, color: ROLE_COLORS[pl.role] || '#888', flexShrink: 0 }}>{pl.img}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', gap: 6, marginBottom: 5, flexWrap: 'wrap', justifyContent: 'inherit', alignItems: 'center' }}>
+                         {pl.isUnsoldPass && (
+                           <span style={{ fontSize: 11, background: 'rgba(245,158,11,0.15)', border: '1px solid var(--am)', padding: '2px 8px', borderRadius: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, color: 'var(--am)', textTransform: 'uppercase', animation: 'pulse 2s infinite' }}>
+                             🔄 Unsold Pool
+                           </span>
+                         )}
                          {pl.tier && pl.tier.trim() !== '' && (
                            <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--bd)', padding: '2px 8px', borderRadius: 4, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, color: 'var(--t2)', textTransform: 'uppercase' }}>
                              Tier {pl.tier.replace(/\D/g, '') || pl.tier}
@@ -635,13 +639,7 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                     <div style={{ fontSize: 12, textAlign: 'center', color: 'var(--re)', background: 'rgba(239,68,68,0.08)', padding: '8px', borderRadius: 4, marginBottom: 8, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>
                       🛑 SQUAD COMPLETE: You cannot bid on any more players.
                     </div>
-                  ) : (
-                    ((me?.spent || 0) >= (me?.budget || 0) * 0.8) && (
-                      <div style={{ fontSize: 12, textAlign: 'center', color: 'var(--am)', background: 'rgba(245,158,11,0.08)', padding: '8px', borderRadius: 4, marginBottom: 8, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>
-                        ⚠️ LOW BUDGET: You have {formatCurrency(budgetLeft)} remaining for {spotsLeft} open spots.
-                      </div>
-                    )
-                  )}
+                  ) : null}
 
                   {!isHighBidder && (
                     <button className="btn bs" onClick={() => performAction('PASS', { bidder: teamId })} disabled={roomState.phase !== 'bidding' || hasPassed || submitting} style={{ width: '100%', marginTop: 9, padding: '11px 6px', fontSize: 13, fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, letterSpacing: 1, borderWidth: 2, borderColor: 'var(--bd2)', opacity: (hasPassed || roomState.phase !== 'bidding') ? 0.45 : 1, cursor: (hasPassed || roomState.phase !== 'bidding') ? 'not-allowed' : 'pointer' }}>
@@ -653,12 +651,18 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
                       ⏭️ {roomState.currentBidder ? 'Skip Player (discard bid)' : 'Skip Player — No Bids'}
                     </button>
                   )}
+                  
                   {me && (
                     <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {spentPct >= 0.8 && spotsLeft > 0 && (
+                        <div style={{ fontSize: 12, padding: 8, background: 'rgba(245,158,11,0.1)', color: 'var(--am)', borderRadius: 4, textAlign: 'center', border: '1px solid rgba(245,158,11,0.2)' }}>
+                           ⚠️ Warning: You have spent over 80% of your budget!
+                        </div>
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--t2)', fontSize: 11, alignItems: 'center', background: 'var(--bg3)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--bd2)' }}>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--t3)', marginBottom: 2 }}>Budget Left{isHighBidder ? ' (incl. bid)' : ''}</span>
-                          <span><strong style={{ color: 'var(--g)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1 }}>{formatCurrency(availLeft(me))}</strong></span>
+                          <span><strong style={{ color: 'var(--g)', fontFamily: "'Bebas Neue', sans-serif", fontSize: 20, letterSpacing: 1 }}>{formatCurrency(budgetLeft)}</strong></span>
                         </div>
                         <div style={{ width: 1, height: 30, background: 'var(--bd2)' }} />
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -820,36 +824,32 @@ export default function AuctionRoom({ roomId, userId, teamId, userName, onLeave 
             ))}
           </div>
 
-          {roomState.phase === 'done' && (() => {
-            const ranked = [...safeParticipants].sort((a, b) => {
-              const aLen = (a.squad || []).length; const bLen = (b.squad || []).length;
-              if (bLen !== aLen) return bLen - aLen;
-              return ((b.budget || 0) - (b.spent || 0)) - ((a.budget || 0) - (a.spent || 0));
-            });
-            const winner = ranked[0];
-            if (!winner) return null;
-            return (
-              <div className="card" style={{ padding: 24, marginBottom: 18, textAlign: 'center', background: `linear-gradient(135deg, ${winner.color}15, ${winner.color}05)`, border: `2px solid ${winner.color}`, boxShadow: `0 0 30px ${winner.color}22`, animation: 'fadeUp 0.6s ease' }}>
-                <div style={{ fontSize: 40, marginBottom: 6 }}>🏆</div>
-                <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 4 }}>Auction Winner</div>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 48, color: winner.color, letterSpacing: 3, lineHeight: 1.1 }}>{winner.name}</div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 14 }}>
-                  <div>
-                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Players</div>
-                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--bl)' }}>{(winner.squad || []).length}</div>
+          {roomState.phase === 'done' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
+              {safeParticipants.map((team: any) => (
+                <div key={team.id} className="card" style={{ padding: 20, textAlign: 'center', background: `linear-gradient(135deg, ${team.color}15, transparent)`, border: `1px solid ${team.color}40`, animation: 'fadeUp 0.6s ease' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
+                    <Avatar name={team.name} size={32} color={team.color} photo={team.photo} />
+                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, color: team.color, letterSpacing: 2, lineHeight: 1.1 }}>{team.name}</div>
                   </div>
-                  <div>
-                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Spent</div>
-                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--or)' }}>{formatCurrency(winner.spent)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Budget Left</div>
-                    <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: 'var(--g)' }}>{formatCurrency((winner.budget || 0) - (winner.spent || 0))}</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 20 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Players</div>
+                      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--bl)' }}>{(team.squad || []).length}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Spent</div>
+                      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--or)' }}>{formatCurrency(team.spent)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: "'Rajdhani', sans-serif", fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--t3)' }}>Budget Left</div>
+                      <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 24, color: 'var(--g)' }}>{formatCurrency((team.budget || 0) - (team.spent || 0))}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })()}
+              ))}
+            </div>
+          )}
         </div>
       )}
 

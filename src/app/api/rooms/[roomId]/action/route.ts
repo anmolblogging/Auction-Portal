@@ -4,7 +4,7 @@ import { getRoom, saveRoom } from '@/lib/db';
 
 const BID_TIMER_MS = 30000; 
 const BID_EXTENSION_MS = 15000; 
-const MIN_BASE_PRICE = 2000000; // 20 Lakhs
+const MIN_BASE_PRICE = 2000000; // 20 Lakhs is the minimum reserved for empty spots
 
 const toArr = (val: any) => Array.isArray(val) ? val : (typeof val === 'object' && val !== null ? Object.values(val) : []);
 
@@ -115,8 +115,10 @@ export async function POST(
           room.playerIdx++;
           
           if (room.playerIdx >= room.players.length) {
+            // UNSOLD PLAYERS ROTATION LOGIC
             if (room.unsoldLog.length > 0) {
-              room.players = [...room.unsoldLog];
+              // TAG PLAYERS WITH "isUnsoldPass" SO THE FRONTEND KNOWS TO SHOW THE BADGE
+              room.players = room.unsoldLog.map((p: any) => ({ ...p, isUnsoldPass: true }));
               room.unsoldLog = []; 
               room.playerIdx = 0;
               room.phase = 'bidding';
@@ -175,6 +177,7 @@ export async function POST(
         
         if (team.spent + nextBidVal > team.budget) return NextResponse.json({ error: 'Insufficient budget' }, { status: 400 });
 
+        // Squad Completion Budget Protection Math Validation
         const spotsLeft = room.squadSize - (team.squad || []).length;
         if (spotsLeft <= 0) {
             return NextResponse.json({ error: 'Squad is fully complete. You cannot bid on anymore players.' }, { status: 400 });
@@ -209,10 +212,7 @@ export async function POST(
         const hadBid = !!room.currentBidder;
         room.phase = 'unsold';
         room.currentBidder = null;
-        
-        // FIX: The skipped player is now successfully pushed to the Unsold Rotation Pool
         room.unsoldLog.push(skipped);
-        
         room.endsAt = now + 1500; 
 
         room.chat.push({
